@@ -1,0 +1,4 @@
+MOV R0,"hello shrey"
+PORT P1,R0
+OUT
+HALT

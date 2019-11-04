@@ -1,0 +1,44 @@
+decl
+	int a[10];
+enddecl
+int main()
+{
+	decl
+		int i,j,tmp,t,n;
+		str prompt;
+	enddecl
+	
+	begin
+		prompt = "NoOfele";
+		tmp = exposcall("Write",-2,prompt);
+		tmp = exposcall("Read",-1,n);
+		i = 0;
+		while(i<n) do
+			tmp = exposcall("Read",-1,a[i]);
+			i = i + 1;
+		endwhile;
+		
+		i = 0;
+		j = 0;
+		while(i<n) do
+			j = 0;
+			while((j<(n-i-1))) do
+				if(a[j]>a[j+1]) then
+					t = a[j];
+					a[j] = a[j+1];
+					a[j+1] = t;
+				endif;
+				j = j + 1;
+			endwhile;		
+			i = i + 1;
+		endwhile;
+		i = 0;
+		while(i<n) do
+			tmp = exposcall("Write",-2,a[i]);
+			i = i + 1;
+		endwhile;
+		//i = 10/0;
+		return 0;
+	end
+}
+

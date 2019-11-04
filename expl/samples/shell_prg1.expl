@@ -1,0 +1,21 @@
+int main()
+{
+decl
+	str prompt;
+	int tmp;
+enddecl
+
+begin	
+	prompt = "FileName";
+	tmp = exposcall("Write",-2,prompt);
+	tmp = exposcall("Read",-1,prompt);
+	tmp = exposcall("Exec",prompt);
+	
+	if(tmp == -1) then
+		prompt = "Unsuccessful";
+		tmp = exposcall("Write",-2,prompt);
+	endif;
+	
+	return 0;
+end
+}

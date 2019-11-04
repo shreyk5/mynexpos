@@ -1,0 +1,104 @@
+//set the mode flag to -1
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = -1;
+
+//save SP into UPTR and change to kernel stack
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13] = SP;
+SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512-1;
+backup;
+multipush(EIP);
+
+alias userSP R10;
+userSP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+
+if(userSP == (PTLR*512 - 1)) then
+	backup;
+	R1 = EXIT_PROCESS;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_1;
+	restore;
+
+	call MOD_5;
+endif;
+
+if(EC==1) then
+	backup;
+	print("IllInst");
+	R1 = EXIT_PROCESS;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_1;
+	restore;
+	
+	call MOD_5;
+endif;
+
+if(EC==2) then
+	backup;
+	print("IllAccess");
+	R1 = EXIT_PROCESS;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_1;
+	restore;
+	
+	call MOD_5;
+endif;
+
+if(EC == 3) then
+	backup;	
+	print("Arithmet");
+	R1 = EXIT_PROCESS;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_1;
+	restore;
+
+	call MOD_5;
+endif;
+
+if(EC == 0) then
+	
+	//print "PFault";
+	if((EPN == 2) || (EPN == 3)) then
+		multipush(EC,EIP,EPN,EMA);
+		backup;
+		print "heap";
+		R1 = GET_FREE_PAGE;
+		call MOD_2;
+		[PTBR+4] = R0;
+		[PTBR+5] = "1110";
+		restore;
+		multipop(EC,EIP,EPN,EMA);
+
+		multipush(EC,EIP,EPN,EMA);
+		backup;
+		R1 = GET_FREE_PAGE;
+		call MOD_2;
+		[PTBR+6] = R0;
+		[PTBR+7] = "1110";
+		restore;
+		multipop(EC,EIP,EPN,EMA);
+	endif;
+
+	if((EPN==4) || (EPN==5) || (EPN==6) || (EPN==7)) then
+		backup;
+		multipush(EC,EIP,EPN,EMA);
+		R1 = GET_CODE_PAGE;
+		R2 = [DISK_MAP_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*10+EPN];
+		call MOD_2;
+		multipop(EC,EIP,EPN,EMA);	
+				
+		[PTBR+EPN*2] = R0;
+		[PTBR+EPN*2+1] = "1100";
+		restore;
+	endif;
+
+endif;
+
+multipop(EIP);
+restore;
+
+SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+SP = SP + 1;
+
+[[PTBR + 2*((SP)/512)]*512 + (SP%512)] = EIP;
+
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;
+ireturn;

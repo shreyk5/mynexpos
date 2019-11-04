@@ -1,0 +1,229 @@
+//system calls Open and Close are implemented in the interrupt routine 5
+
+alias protable R4;
+alias userSP R5;
+
+protable = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16;
+[protable + 13] = SP;
+userSP = SP;
+
+SP = [protable + 11] * 512 - 1;	//change to kernel stack
+
+//get the sys call number from user stack
+alias syscall R6;
+syscall = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512];
+
+alias retAddr R7;
+retAddr = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
+
+//----------------------------------OPEN-------------------------------------------------
+//argument is filename
+//return file descriptor if success
+//return -1 if file is not found or file is not a data file(even root file can be opened)
+//return -2 if system has reached its limit of open files
+//return -3 if process has reached its limit of resources
+
+if (syscall == INT_OPEN) then
+	[protable + 9] = INT_OPEN;	//set the mode flag
+	
+	//get the filename from user stack
+	alias filename R8;
+	filename = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+	//find a free entry in resource table
+	alias userAreaPage R9;
+	userAreaPage = [protable + 11]; 
+
+	alias fileDesc R10;
+	fileDesc = -1;
+	alias i R11;
+	i = 496;
+
+	while(i<512) do
+		if([userAreaPage*512 + i] == -1) then
+			fileDesc = (i-496)/2;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+	
+	if(fileDesc == -1) then	//process has reached its limit of resources
+		[retAddr] = -3;		//return -3
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;
+	endif;
+
+	multipush(R4,R5,R6,R7,R8,R9,R10,R11);
+	R1 = OPEN;		//return open file table entry
+	R2 = filename;
+	call MOD_3;
+	multipop(R4,R5,R6,R7,R8,R9,R10,R11);
+
+	alias file_table_idx R12;
+	file_table_idx = R0;
+
+	if(file_table_idx == -1) then	//if file type is of EXEC
+		[retAddr] = -1;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;
+	endif;
+
+	if(file_table_idx == -2) then	//Reached maximum number of open files in the system
+		[retAddr] = -2;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;
+	endif;
+
+	//File can be opened
+	//set the resource table entry
+	[userAreaPage*512 + 496 + 2*fileDesc] = FILE;
+	[userAreaPage*512 + 496 + 2*fileDesc + 1] = file_table_idx;
+
+	[retAddr] = fileDesc;
+	SP = [protable + 13];
+	[protable + 9] = 0;
+	ireturn;
+endif;
+//---------------------------------------------------------------------------------------
+
+
+//-------------------------------------CLOSE----------------------------------------------
+//argument is a file descriptor
+//return 0 if success
+//return -1 if file desc is invalid
+
+if(syscall == INT_CLOSE) then
+	[protable + 9] = INT_CLOSE;	//set the mode flag
+	
+	//get the file desc value from user stack
+	alias fileDesc R8;
+	fileDesc = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+	alias userAreaPage R9;
+	userAreaPage = [protable + 11];
+
+	//check if it is valid or not
+	if((fileDesc<0) || (fileDesc>=8) || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
+		[retAddr] = -1;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;	
+	endif;
+
+	//get the file table index
+	alias file_table_idx R10;
+	file_table_idx = [userAreaPage*512 + 496 + 2*fileDesc + 1];
+
+	backup;
+	R1 = CLOSE;		//it does not return anything
+	R2 = file_table_idx;
+	call MOD_3;
+	restore;
+
+	//invalidate the resource table entry
+	[userAreaPage*512 + 496 + 2*fileDesc] = -1;
+
+	[retAddr] = 0;	//set the return value to 0
+	SP = [protable + 13];	//set SP to user stack
+	[protable + 9] = 0;	//reset the mode flag	
+	ireturn;	
+endif;
+//--------------------------------------------------------------------------------------------
+
+//-------------------------------------------SEEK----------------------------------------------
+//arguments are file desc and offset
+//return 0 if success
+//return -1 if file desc is invalid
+//return -2 if offset value moves the file pointer to a position outside the file
+if(syscall == INT_SEEK) then
+	alias fileDesc R8;
+	fileDesc = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
+
+	alias userAreaPage R9;
+	userAreaPage = [protable + 11];
+
+	//check if file desc is valid or not
+	if((fileDesc<0) || (fileDesc>=8) || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
+		[retAddr] = -1;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;	
+	endif;
+
+	alias open_ft_idx R10;
+	open_ft_idx = [userAreaPage*512 + 496 + 2*fileDesc + 1];
+
+	alias inode_idx R11;
+	inode_idx = [OPEN_FILE_TABLE + 4*open_ft_idx];
+
+	multipush(R4,R5,R6,R7,R8,R9,R10,R11);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inode_idx;
+	call MOD_0;
+	multipush(R4,R5,R6,R7,R8,R9,R10,R11);
+
+	if(R0 == -1) then	//file has been deleted
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		[retAddr] = -1;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;
+	endif;
+
+	alias LSeek R12;
+	LSeek = [OPEN_FILE_TABLE + 4*open_ft_idx + 2];
+
+	alias offset R13;
+	offset = [[PTBR + 2*((userSP-3)/512)]*512 + (userSP-3)%512];
+
+	if(LSeek + offset < 0) then	//invalid offset
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		[retAddr] = -2;
+		SP = [protable + 13];
+		[protable + 9] = 0;
+		ireturn;
+	endif;
+
+	if(offset == 0) then
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = 0;
+	else
+		if((LSeek + offset) > [INODE_TABLE + 16*inode_idx + 2]) then
+			[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = [INODE_TABLE + 16*inode_idx + 2];
+		else
+			[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = LSeek + offset;
+		endif;
+	endif;
+
+	backup;
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inode_idx;
+	call MOD_0;
+	restore;
+		
+	[retAddr] = 0;
+	SP = [protable + 13];
+	[protable + 9] = 0;
+	ireturn;	
+
+endif;
+//---------------------------------------------------------------------------------------------
+
+SP = [protable + 13];
+ireturn;

@@ -1,0 +1,29 @@
+//UPTR of currently running process is saved
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1]*16) + 11] * 512 - 1;
+
+//save context of the currently running process
+backup;
+
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+4] = READY;
+//currently running process is set to be READY
+
+alias i R1;
+i = 0;
+
+while(i < 16) do
+	if([PROCESS_TABLE+(i*16)+4]!=TERMINATED) then
+		[PROCESS_TABLE+(i*16)] = [PROCESS_TABLE+(i*16)]+1;
+	endif;
+	i = i + 1;
+endwhile;
+
+call MOD_5;	//scheduler program is called
+
+restore;	//restore context of new process
+
+//SP is set to user stack pointer of new process
+SP = [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13];
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+9] = 0; // mode is set to 0
+
+ireturn;

@@ -1,0 +1,296 @@
+//system calls Newusr, Remusr, Setpwd, Getuname and Getuid are implemented in interrupt routine 16
+//they have sys call numbers 22, 23, 24, 25, 26 respectively
+
+alias protable R3;
+alias syscall R4;
+
+alias curr_pid R5;
+curr_pid = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+
+protable = PROCESS_TABLE + 16*curr_pid;
+
+alias userSP R6;
+userSP = SP;
+
+syscall = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512];
+
+[PROCESS_TABLE + curr_pid * 16 + 13] = SP;	//save SP into UPTR
+SP = [PROCESS_TABLE + curr_pid * 16 + 11] * 512 - 1;	//change to kernel stack
+
+alias RetAddr R7;
+RetAddr = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
+
+alias UserName R8;
+UserName = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+alias password R9;
+password = [[PTBR + 2 * ((userSP - 3) / 512)] * 512 + (userSP - 3) % 512];
+
+[protable + 9] = syscall;	//set the mode flag
+
+//---------------------------------------NEWUSR--------------------------------------------------------------
+//arguments are userName and password
+//return 0 if success
+//return -1 if user already exists
+//return -2 if permission denied
+//return -3 if Number of users has reached the system limit
+
+if (syscall == 22) then
+
+	if(curr_pid != 2 || [protable + 3] != 1) then //current process is not shell or current user is not root
+		[RetAddr] = -2;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+	
+	encrypt password;
+
+	alias i R10;
+	i = 0;
+
+	while(i < MAX_USER_NUM) do
+		if([USER_TABLE + 2*i] == UserName) then	//username already exists
+			[RetAddr] = -1;
+			[protable + 9] = 0;	//reset the mode flag
+			SP = [protable + 13];
+			ireturn;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	alias free_entry R11;
+	free_entry = -1;
+
+	i = 0;
+	while(i < MAX_USER_NUM) do
+		if([USER_TABLE + 2*i] == -1) then	//free entry found
+			free_entry = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(free_entry == -1) then	//no free entry found
+		[RetAddr] = -3;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	//free entry is found
+	[USER_TABLE + free_entry*2] = UserName;
+	[USER_TABLE + free_entry*2 + 1] = password;
+	
+	[RetAddr] = 0;	//success
+	[protable + 9] = 0;	//reset the mode flag
+	SP = [protable + 13];
+	ireturn;
+endif;
+//-------------------------------------------------------------------------------------------------------------
+
+//------------------------------------------------REMUSR-------------------------------------------------------
+//This system call is executed from the shell process of the root user
+//The root user and kernel cannot be removed
+//argument is a username
+//return -1 if user does not exist
+//return -2 if permission denied
+//return -3 if undeleted files exist for the user
+if(syscall == 23) then
+	
+	if(curr_pid != 2 || [protable + 3] != 1) then //curr process is not shell of root
+		[RetAddr] = -2;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;	
+	endif;
+
+	if(UserName == "root" || UserName == "kernel") then //root or kernel user being deleted
+		[RetAddr] = -2;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;	
+	endif;
+
+	//find the username in USER TABLE
+	alias i R11;
+	i = 0;
+	alias userID R10;
+	userID = -1;
+
+	while(i < MAX_USER_NUM) do
+		if([USER_TABLE + 2*i] == UserName) then
+			userID = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(userID == -1) then	//user does not exist
+		[RetAddr] = -1;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	//loop through the root file entries to check if it contains files of this user
+	i = 0;
+	while(i<MAX_FILE_NUM) do
+		if([ROOT_FILE + 8*i] != -1 && [ROOT_FILE + 8*i + 3] == UserName) then	//undeleted files exist for the user
+			[RetAddr] = -3;
+			[protable + 9] = 0;	//reset the mode flag
+			SP = [protable + 13];
+			ireturn;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	//user exists
+	[USER_TABLE + 2*userID] = -1;	//invalidate the user table entries
+	[USER_TABLE + 2*userID + 1] = -1;
+
+	[RetAddr] = 0;	//user removal success
+	[protable + 9] = 0;	//reset the mode flag
+	SP = [protable + 13];
+	ireturn;
+
+endif;
+//-------------------------------------------------------------------------------------------------------------
+
+//--------------------------------------------SETPWD-----------------------------------------------------------
+//This system call can be executed only from the shell process. 
+//A user can set only his/her password
+//Root user can set any user's password.
+
+//arguments are username and password
+//return 0 if success
+//return -1 if unauthorised attempt to change password
+//return -2 if user does not exist
+
+if(syscall == 24) then
+	
+	if([protable + 3] != 2) then	//if not called from shell
+		[RetAddr] = -1;	
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif; 
+
+	// alias UserName R8;
+	// UserName = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+	// alias password R9;
+	// password = [[PTBR + 2 * ((userSP - 3) / 512)] * 512 + (userSP - 3) % 512];
+	encrypt password;
+	
+	//find username in USER_TABLE	
+	alias i R10;
+	i = 0;
+
+	alias userID R11;
+	userID = -1;
+	while(i < MAX_USER_NUM) do
+		if([USER_TABLE + 2*i] == UserName) then
+			userID = i;
+			break;
+		endif;	
+		i = i + 1;
+	endwhile;
+
+	if(userID == -1) then	//user not found
+		[RetAddr] = -2;	
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	alias userID_process R12;
+	userID_process = [protable + 3];
+
+	//userid of the process is not equal to the userid of the user and current user is not root
+	if(userID != userID_process && userID_process != 1) then
+		[RetAddr] = -1;	
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	//password can be updated
+	[USER_TABLE + 2*userID + 1] = password;
+
+	[RetAddr] = 0;	//password reset success
+	[protable + 9] = 0;	//reset the mode flag
+	SP = [protable + 13];
+	ireturn;
+
+endif;
+
+//-------------------------------------------------------------------------------------------------------------
+
+//-----------------------------------------------------GETUNAME------------------------------------------------
+//argument is userID
+//return -1 if invalid userID
+//return username if success 
+if(syscall == 25) then
+
+	alias userID R10;
+	userID = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+	if(userID<0 || userID >= MAX_USER_NUM || [USER_TABLE + 2*userID] == -1) then
+		[RetAddr] = -1;	
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	// alias UserName R8;
+	UserName = [USER_TABLE + 2*userID];
+
+	[RetAddr] = UserName;
+	[protable + 9] = 0;	//reset the mode flag
+	SP = [protable + 13];
+	ireturn;	
+
+endif;
+//-------------------------------------------------------------------------------------------------------------
+
+//-----------------------------------------------------GETUID------------------------------------------------
+//argument is username
+//return -1 if invalid username
+//return userID if success
+
+if(syscall == 26) then
+	// alias UserName R8;
+	// UserName = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+	alias i R11;
+	i = 0;
+
+	alias userID R10;
+	userID = -1;
+
+	while(i < MAX_USER_NUM) do
+		if([USER_TABLE + 2*i] == UserName) then
+			userID = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(userID == -1) then	//invalid username
+		[RetAddr] = -1;
+		[protable + 9] = 0;	//reset the mode flag
+		SP = [protable + 13];
+		ireturn;
+	endif;
+
+	[RetAddr] = userID;
+	[protable + 9] = 0;	//reset the mode flag
+	SP = [protable + 13];
+	ireturn;	
+
+endif;
+//-------------------------------------------------------------------------------------------------------------
+
+SP = [protable + 13];
+ireturn;

@@ -1,0 +1,47 @@
+// get the pid of current running process
+alias curr_pid R0;
+
+curr_pid = [SYSTEM_STATUS_TABLE+1];
+
+multipush(BP);
+
+//save the values of ptbr,ptlr etc into the process table
+[PROCESS_TABLE + curr_pid*16 + 14] = PTBR;
+[PROCESS_TABLE + curr_pid*16 + 15] = PTLR;
+[PROCESS_TABLE + curr_pid*16 + 12] = SP%512;
+
+alias new_pid R1;
+new_pid = 0;	//by default IDLE process
+
+alias i R2;
+i = curr_pid + 1;
+
+while(i < 16) do
+	if(([PROCESS_TABLE+16*i+4]==CREATED)||([PROCESS_TABLE+16*i+4]==READY))then
+		new_pid = i;
+		break;
+	endif;
+	i = i + 1;
+endwhile;
+
+//breakpoint;
+
+//change the SP to kernel stack of new process
+SP = [PROCESS_TABLE+16*new_pid+11]*512 + [PROCESS_TABLE+16*new_pid+12]; 
+PTBR = [PROCESS_TABLE+16*new_pid+14];
+PTLR = [PROCESS_TABLE+16*new_pid+15];
+
+[SYSTEM_STATUS_TABLE+1] = new_pid;
+
+if([PROCESS_TABLE+new_pid*16+4]==CREATED) then
+	BP = [[PROCESS_TABLE + new_pid*16 + 11] * 512];
+	[PROCESS_TABLE+new_pid*16+4] = RUNNING;
+	[PROCESS_TABLE+new_pid*16+9] = 0;
+	SP = [PROCESS_TABLE+new_pid*16+13];
+	ireturn;
+endif;
+
+[PROCESS_TABLE+new_pid*16+4] = RUNNING;
+multipop(BP);
+
+return;

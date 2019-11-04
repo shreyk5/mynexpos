@@ -1,0 +1,13 @@
+int main()
+{
+	decl
+		int tmp,n;
+	enddecl
+	
+	begin
+		breakpoint;
+		n = 10/0;
+		breakpoint;
+		return 0;
+	end
+}

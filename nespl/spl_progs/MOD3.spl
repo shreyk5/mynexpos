@@ -1,0 +1,265 @@
+alias func R1;
+
+//---------------------------------OPEN function------------------------------------------
+//argument is a file name
+//return filetable index or -1,-2
+if(func == OPEN) then
+	//find the index of inode entry of the file
+	alias fileName R2;
+	
+	alias i R3;
+	i = 0;
+	alias inode_idx R4;
+	inode_idx = -1;
+	while(i < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*i + 1] == fileName) then
+			inode_idx = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(inode_idx == -1) then //file is not present
+		R0 = -1;
+		return;
+	endif;
+
+	//file is present
+	// if([INODE_TABLE + 16*inode_idx] == EXEC) then
+	// 	R0 = -1;
+	// 	return;
+	// endif;
+
+	backup;
+	R1 = ACQUIRE_INODE; 
+	R2 = [SYSTEM_STATUS_TABLE +1];
+	R3 = inode_idx;
+	call MOD_0;
+	
+	if(R0 == -1) then	//locking fails
+		restore;
+		R0 = -1;
+		return;
+	endif;
+
+	restore;
+
+	if([INODE_TABLE + 16*inode_idx] == EXEC) then
+		//release inode
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		R0 = -1;
+		return;
+	endif;
+
+	//find a free entry in open file table
+	alias open_ft_idx R5;
+	open_ft_idx = -1;
+	i = 0;
+	while(i<MAX_OPENFILE_NUM) do
+		if([OPEN_FILE_TABLE + 4*i] == -1) then
+			open_ft_idx = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(open_ft_idx == -1) then	//Reached maximum number of open files in the system
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		R0 = -2;
+		return;
+	endif;
+
+	if([INODE_TABLE + 16*inode_idx + 1] == "root") then
+		[OPEN_FILE_TABLE + 4*open_ft_idx] = INODE_ROOT;
+	else
+		[OPEN_FILE_TABLE + 4*open_ft_idx] = inode_idx;
+		
+		if([FILE_STATUS_TABLE + 4*inode_idx + 1] == -1) then
+			[FILE_STATUS_TABLE + 4*inode_idx + 1] = 1;
+		else
+			[FILE_STATUS_TABLE + 4*inode_idx + 1] = [FILE_STATUS_TABLE + 4*inode_idx + 1] + 1;
+		endif;
+	endif;
+
+	[OPEN_FILE_TABLE + 4*open_ft_idx + 1] = 1;	//open instance count
+	[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = 0;	//LSEEK
+
+	backup;
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE +1];
+	R3 = inode_idx;
+	call MOD_0;
+	restore;
+
+	R0 = open_ft_idx;
+	return;
+
+endif;
+//----------------------------------------------------------------------------------------
+
+
+//---------------------------------CLOSE function------------------------------------------
+//argument is a open file table index
+//no return value
+if(func == CLOSE) then
+	//decrement open instance count in open file table
+	backup;
+
+	alias open_ft_idx R2;
+	[OPEN_FILE_TABLE + 4*open_ft_idx + 1] = [OPEN_FILE_TABLE + 4*open_ft_idx + 1] - 1;
+
+	alias inode_idx R3;
+	inode_idx = [OPEN_FILE_TABLE + 4*open_ft_idx]; 
+
+	if([OPEN_FILE_TABLE + 4*open_ft_idx + 1] == 0) then
+		//invalidate the open table entry
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 0] = -1;
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 1] = -1;
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = -1;
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 3] = -1;
+		
+		if([INODE_TABLE + 16*inode_idx + 1] != "root") then
+			[FILE_STATUS_TABLE + 4*inode_idx + 1] = [FILE_STATUS_TABLE + 4*inode_idx + 1] - 1;
+		endif;
+
+		if([FILE_STATUS_TABLE + 4*inode_idx + 1] == 0) then
+			[FILE_STATUS_TABLE + 4*inode_idx + 1] = -1;
+		endif;
+	endif;
+
+	restore;
+	return;
+endif;
+//----------------------------------------------------------------------------------------
+
+//--------------------------------------buffered read-------------------------------------
+//arguments are disk block num, offset, physical address
+//no return value
+if(func == BUFFERED_READ) then
+	backup;
+	
+	alias block_num R2;
+	alias offset R3;
+	alias address R4;
+
+	alias buffer_num R5;
+	buffer_num = block_num % 4;
+
+	backup;
+	R1 = ACQUIRE_BUFFER;
+	R2 = buffer_num; 
+	R3 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_0;
+	restore;
+
+	if([BUFFER_TABLE + 4*buffer_num] != block_num) then
+		if([BUFFER_TABLE + 4*buffer_num + 1] == 1) then	//dirty bit is set(block was modified in buffer)
+			backup;
+			R1 = DISK_STORE;
+			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R3 = 71 + buffer_num;
+			R4 = [BUFFER_TABLE + 4*buffer_num];
+			call MOD_4;
+			restore;
+
+			[BUFFER_TABLE + 4*buffer_num + 1] = 0;	//set the dirty bit to 0
+		endif;
+
+		backup;
+		R1 = DISK_LOAD;
+		R4 = block_num;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = 71 + buffer_num;
+		call MOD_4;
+		restore;
+
+		[BUFFER_TABLE + 4*buffer_num] = block_num;		
+	endif;
+
+	[address] = [(71 + buffer_num)*512 + offset];
+
+	backup;
+	R1 = RELEASE_BUFFER;
+	R2 = buffer_num;
+	R3 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_0;
+	restore;
+
+	restore;
+	return;
+endif;
+//----------------------------------------------------------------------------------------
+
+//--------------------------------------buffered write-------------------------------------
+//arguments are disk block num, offset, word
+//no return value
+if(func == BUFFERED_WRITE) then
+	backup;
+
+	alias block_num R2;
+	alias offset R3;
+	alias word R4;
+
+	alias buffer_num R5;
+	buffer_num = block_num % 4;
+
+	backup;
+	R1 = ACQUIRE_BUFFER;
+	R2 = buffer_num; 
+	R3 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_0;
+	restore;
+
+	if([BUFFER_TABLE + 4*buffer_num] != block_num) then
+		if([BUFFER_TABLE + 4*buffer_num + 1] == 1) then	//dirty bit is set(block was modified in buffer)
+			backup;
+			R1 = DISK_STORE;
+			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R3 = 71 + buffer_num;
+			R4 = [BUFFER_TABLE + 4*buffer_num];
+			call MOD_4;
+			restore;
+
+			[BUFFER_TABLE + 4*buffer_num + 1] = 0;	//set the dirty bit to 0
+		endif;
+
+		backup;
+		R1 = DISK_LOAD;
+		R4 = block_num;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = 71 + buffer_num;
+		call MOD_4;
+		restore;
+
+		[BUFFER_TABLE + 4*buffer_num] = block_num;		
+	endif;
+
+	[(71 + buffer_num)*512 + offset] = word;
+	[BUFFER_TABLE + 4*buffer_num + 1] = 1;
+
+	backup;
+	R1 = RELEASE_BUFFER;
+	R2 = buffer_num;
+	R3 = [SYSTEM_STATUS_TABLE + 1];
+	call MOD_0;
+	restore;
+
+	restore;
+	return;
+endif;
+//----------------------------------------------------------------------------------------
+
+
+return;

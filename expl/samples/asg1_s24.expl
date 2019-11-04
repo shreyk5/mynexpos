@@ -1,0 +1,25 @@
+int main()
+{
+	decl
+		int tmp, fp, fileDesc;
+    		str file, word;
+	enddecl
+
+	begin
+    		tmp = exposcall("Read",-1,file);
+   		fileDesc = exposcall("Open",file);
+		//tmp = exposcall("Write",-2,fileDesc);
+    		while(1 == 1) do
+			//write("hi");
+      			tmp = exposcall("Read",fileDesc,word);
+			//write(tmp);
+      			if(tmp == -2) then
+        			break;
+      			endif;
+			
+      			tmp = exposcall("Write",-2,word);
+    		endwhile;
+		tmp = exposcall("Close",fileDesc);
+	return 0;
+	end
+}

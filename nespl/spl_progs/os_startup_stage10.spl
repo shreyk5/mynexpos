@@ -1,0 +1,64 @@
+loadi(63,13);  // load library code
+loadi(64,14);
+
+loadi(65,7);   // load INIT program 
+loadi(66,8);
+
+loadi(22,35);  // load INT10 module
+loadi(23,36);
+
+loadi(2,15);   // load exception handler routine
+loadi(3,16);
+
+loadi(4,17);   // load timer interrupt
+loadi(5,18);
+
+loadi(16,29);  // INT7 for print
+loadi(17,30);
+
+PTBR = PAGE_TABLE_BASE;
+PTLR = 10;
+
+//reference-valid-write-dirty
+
+// Reference : initialised to 0 , set to 1 on page access
+// Valid : indicates whether the page table entry is valid or not
+// write : 1 if user is allowed to write
+// dirty : 1 if instruction modifies contents of the page
+
+//Library
+[PTBR+0] = 63;
+[PTBR+1] = "0100";
+[PTBR+2] = 64;
+[PTBR+3] = "0100";
+
+//Heap
+[PTBR+4] = 78;
+[PTBR+5] = "0110";
+[PTBR+6] = 79;
+[PTBR+7] = "0110";
+
+//Code
+[PTBR+8] = 65;
+[PTBR+9] = "0100";
+[PTBR+10] = 66;
+[PTBR+11] = "0100";
+[PTBR+12] = -1;
+[PTBR+13] = "0000";
+[PTBR+14] = -1;
+[PTBR+15] = "0000";
+
+//Stack
+[PTBR+16] = 76;
+[PTBR+17] = "0110";
+[PTBR+18] = 77;
+[PTBR+19] = "0110";
+
+SP = 8*512;
+[76*512] = [65 * 512 + 1]; 
+
+[PROCESS_TABLE+11] = 80;
+[PROCESS_TABLE+1] = 0;
+[SYSTEM_STATUS_TABLE+1] = 0;
+
+ireturn;  // unprivileged mode execution starts

@@ -1,0 +1,146 @@
+//--------------------------MEMORY MANAGER MODULE---------------------------
+
+// R1 contains the function number and R2 contains page num if RELEASE_PAGE
+
+if(R1 == GET_FREE_PAGE) then
+	backup;
+	
+	//increment the wait memory count
+	[SYSTEM_STATUS_TABLE+3] = [SYSTEM_STATUS_TABLE+3] + 1;
+	
+	while([SYSTEM_STATUS_TABLE+2]==0) do
+		[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+4] = WAIT_MEM;
+		backup;
+		call MOD_5;
+		restore;
+	endwhile;	
+	[SYSTEM_STATUS_TABLE+3] = [SYSTEM_STATUS_TABLE+3]-1;
+	[SYSTEM_STATUS_TABLE+2] = [SYSTEM_STATUS_TABLE+2]-1;
+	restore;
+	
+	//find a free page using memory free list
+	alias i R0;
+	i = 76;
+	while(i<MAX_MEM_PAGE) do
+		if([MEMORY_FREE_LIST+i]==0) then
+			[MEMORY_FREE_LIST+i] = 1;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+	//print i;	
+	return;
+endif;
+
+if(R1 == RELEASE_PAGE) then
+	backup;
+		
+	alias page_num R2;
+	[MEMORY_FREE_LIST + page_num] = [MEMORY_FREE_LIST + page_num] - 1;
+	
+	//if this page is not used by anyone	
+	if([MEMORY_FREE_LIST + page_num] == 0) then
+		//increment the memory free count
+		[SYSTEM_STATUS_TABLE+2] = [SYSTEM_STATUS_TABLE+2]+1;
+
+		//update the status of processes waiting for memory
+		alias i R3;
+		i = 0;
+	
+		while(i<16) do
+			if([PROCESS_TABLE+16*i+4] == WAIT_MEM) then
+				[PROCESS_TABLE+16*i+4] = READY;
+			endif;
+			i = i + 1;
+		endwhile;
+
+	endif;
+	
+	restore;			
+	return;
+endif;
+
+
+if(R1 == GET_CODE_PAGE) then	//R2 contains block number to be loaded
+	//check the disk map table of all processes for this block
+	
+	//backup;
+	alias Block_num R2;
+	alias Disk_Table R3;
+	alias i R4;
+	alias block R5;
+	alias page_num R0;
+	i = 0;
+	
+	while(i<16) do
+		Disk_Table = DISK_MAP_TABLE+10*i; //10 entries for a process
+		block = 0;
+		
+		while(block<4) do
+			if([Disk_Table+4+block] == Block_num && [PAGE_TABLE_BASE+20*i+2*(block+4)]!=-1) then
+				page_num = [PAGE_TABLE_BASE+20*i+2*(block+4)];
+				[MEMORY_FREE_LIST+page_num] = [MEMORY_FREE_LIST+page_num] + 1;
+				return;
+			endif;
+			block = block + 1;
+		endwhile;
+		i = i + 1;
+	endwhile;
+	
+	//code page is not in memory
+	R1 = GET_FREE_PAGE;
+	call MOD_2;
+		
+	R1 = DISK_LOAD;
+	R4 = Block_num;
+	R2 = [SYSTEM_STATUS_TABLE+1];
+	R3 = R0;
+	call MOD_4;
+	//print R0;
+	return;			
+	
+endif;
+
+if(R1 == RELEASE_BLOCK) then
+	[DISK_FREE_LIST+R2] = [DISK_FREE_LIST+R2]-1;
+	return;
+endif;
+
+if(R1 == GET_FREE_BLOCK) then
+	alias i R0;
+ 	i = DISK_FREE_AREA;
+
+ 	while(i < DISK_SWAP_AREA) do    //blocks from 69 to 255 are user blocks
+ 		if([DISK_FREE_LIST + i] == 0) then
+ 			[DISK_FREE_LIST + i] = 1;
+ 			break; 
+ 		endif;
+ 		i = i + 1;
+ 	endwhile;
+
+ 	if(i == DISK_SWAP_AREA) then
+ 		i = -1;
+ 	endif;
+
+ 	return;
+endif;
+
+if(R1 == GET_SWAP_BLOCK) then
+	//no argument
+	alias i R0;
+ 	i = DISK_SWAP_AREA;
+
+ 	while(i < DISK_SIZE) do    //blocks from 69 to 255 are user blocks
+ 		if([DISK_FREE_LIST + i] == 0) then
+ 			[DISK_FREE_LIST + i] = 1;
+ 			break; 
+ 		endif;
+ 		i = i + 1;
+ 	endwhile;
+
+ 	if(i == DISK_SIZE) then
+ 		i = -1;
+ 	endif;
+
+ 	return;
+endif;

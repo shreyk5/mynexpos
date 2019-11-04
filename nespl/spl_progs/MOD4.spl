@@ -1,0 +1,113 @@
+alias functionNum R1;
+alias curr_pid R2;
+alias word R3;
+
+//----------------------------TERMINAL WRITE----------------------------------
+if(functionNum == TERMINAL_WRITE) then
+	backup;
+	// call acquire terminal using function no. 8 in R1 and pid in R2
+	R1 = 8;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+	
+	print word;	//terminal has been acquired
+	
+	backup;
+	// call release terminal using function no. 9 in R1 and pid in R2
+	R1 = 9;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+endif;
+//------------------------END OF TERMINAL WRITE----------------------------
+
+
+//--------------------------TERMINAL READ-----------------------------------
+if(functionNum == TERMINAL_READ) then
+	backup;
+	R1 = 8;
+	R2 = [SYSTEM_STATUS_TABLE+1];
+	call MOD_0;	//call acquire terminal
+	restore;
+	
+	read;
+	[PROCESS_TABLE+16*curr_pid+4] = WAIT_TERMINAL;
+	backup;		//save context
+	//breakpoint;
+	call MOD_5;	//schedule another process
+	restore;	//restore context
+	
+	[ [PTBR+(2*(word)/512)]*512 + word%512] = [PROCESS_TABLE+curr_pid*16+8];
+endif;
+//------------------------END OF TERMINAL READ------------------------------
+
+
+//-------------------------DISK LOAD----------------------------------------
+if(functionNum == DISK_LOAD) then
+	alias page_num R3;
+	alias block_num R4;
+	
+	backup;
+	R1 = ACQUIRE_DISK;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+
+	//[DISK_STATUS_TABLE+0] = 1;	//no need it is done by ACQUIRE_DISK
+	[DISK_STATUS_TABLE+1] = 0;	//load operation
+	[DISK_STATUS_TABLE+2] = page_num;
+	[DISK_STATUS_TABLE+3] = block_num;
+	// backup;
+	// if(block_num == -1) then
+	// 	print "load";
+	// 	print [PROCESS_TABLE + curr_pid*16 + 9];
+	// 	print block_num;
+	// endif;
+	// restore;
+	load(page_num,block_num);
+	
+	[PROCESS_TABLE+curr_pid*16+4] = WAIT_DISK;
+	backup;
+	call MOD_5;	//schedule another process while loading takes place
+	restore;
+	
+endif;
+//--------------------END OF DISK LOAD-------------------------------------
+
+//-------------------------DISK STORE----------------------------------------
+if(functionNum == DISK_STORE) then
+	alias page_num R3;
+	alias block_num R4;
+	
+	backup;
+	R1 = ACQUIRE_DISK;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+
+	//[DISK_STATUS_TABLE+0] = 1;	//no need it is done by ACQUIRE_DISK
+	[DISK_STATUS_TABLE+1] = 1;	//store operation
+	[DISK_STATUS_TABLE+2] = page_num;
+	[DISK_STATUS_TABLE+3] = block_num;
+	// backup;
+	// if(block_num == -1) then
+	// 	print "store";
+	// 	print [PROCESS_TABLE + curr_pid*16 + 9];
+	// 	print block_num;
+	// endif;
+	// restore;
+	store(page_num,block_num);
+	
+	[PROCESS_TABLE+curr_pid*16+4] = WAIT_DISK;
+	backup;
+	call MOD_5;	//schedule another process while storing takes place
+	restore;
+	
+endif;
+//--------------------END OF DISK STORE-------------------------------------
+
+
+return;
+	
+			

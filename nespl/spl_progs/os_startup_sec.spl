@@ -1,0 +1,60 @@
+//-------------------------------------IDLE 2------------------------------------------------------------
+PTBR = PAGE_TABLE_BASE + IDLE2_PROCESS*20;
+PTLR = 10;
+
+// LIBRARY
+[PTBR+0] = 63;
+[PTBR+1] = "0100";
+[PTBR+2] = 64;
+[PTBR+3] = "0100";
+
+// HEAP
+[PTBR+4] = -1;
+[PTBR+5] = "0000";
+[PTBR+6] = -1;
+[PTBR+7] = "0000";
+
+// CODE
+[PTBR+8] = 69;
+[PTBR+9] = "0100";
+[PTBR+10] = -1;
+[PTBR+11] = "0000";
+[PTBR+12] = -1;
+[PTBR+13] = "0000";
+[PTBR+14] = -1;
+[PTBR+15] = "0000";
+
+//STACK
+[PTBR+16] = 83;
+[PTBR+17] = "0110";
+[PTBR+18] = -1;
+[PTBR+19] = "0000";
+
+alias protable R5;
+protable = PROCESS_TABLE + IDLE2_PROCESS*16;
+
+[protable + 0] = 0;	//tick;
+[protable + 1] = IDLE2_PROCESS;		//pid
+[protable + 3] = KERNEL;
+[protable + 4] = RUNNING;	//state
+[protable + 11] = 84;	//user area page no.
+[protable + 12] = 0;		//KPTR
+[protable + 13] = 8*512 ;	//UPTR
+[protable + 14] = PTBR;      //PTBR
+[protable + 15] = 10;	//PTLR
+
+[83*512] = [69*512 + 1];
+
+[SYSTEM_STATUS_TABLE + 6] = IDLE2_PROCESS;	//pid2
+[SYSTEM_STATUS_TABLE + 7] = 0;	//LOGOUT_STATUS
+
+[ACCESS_LOCK_TABLE + 0] = 0;	//KERN_LOCK
+[ACCESS_LOCK_TABLE + 1] = 0;	//SCHED_LOCK
+
+PTBR = PAGE_TABLE_BASE + 20*IDLE2_PROCESS;
+PTLR = 10;
+SP = 8*512;
+
+ireturn;
+
+//-------------------------------------------------------------------------------------------------------

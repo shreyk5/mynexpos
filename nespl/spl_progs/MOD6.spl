@@ -1,0 +1,239 @@
+//-----------------------------------------------PAGER MODULE-----------------------------------------------------------
+
+alias func R1;
+alias pid R2;
+
+//-----------------------------------------------------SWAP OUT--------------------------------------------------------------
+if(func == SWAP_OUT) then
+	//Invoked when the physical memory is critically low
+	//The function chooses a process to swap out, and free it's memory by moving it to the disk
+
+	//choose a process to swap out
+	alias i R5;
+ 	i = 3;
+
+ 	alias swap_out_pid R6;
+ 	swap_out_pid = -1;
+
+ 	while(i < 16) do
+ 		if([PROCESS_TABLE + 16*i + 6] == 0 && [PROCESS_TABLE + 16*i + 4] == WAIT_PROCESS) then
+ 			swap_out_pid = i;
+ 			break;
+ 		endif;
+ 		i = i + 1;
+ 	endwhile;
+
+ 	if(swap_out_pid == -1) then	//no process is in a WAIT_PROCESS state. then find a process in WAIT_SEMAPHORE state
+ 		i = 3;
+		while(i < 16) do
+ 			if([PROCESS_TABLE + 16*i + 6] == 0 && [PROCESS_TABLE + 16*i + 4] == WAIT_SEMAPHORE) then
+ 				swap_out_pid = i;
+ 				break;
+ 			endif;
+ 			i = i + 1;
+ 		endwhile;
+ 	endif;
+
+ 	if(swap_out_pid == -1) then	//no process in WAIT_PROCESS OR WAIT_SEMAPHORE
+ 		
+ 		alias protable R7;
+ 		alias max_tick R8;
+ 		max_tick = 0;
+
+ 		i = 3;
+ 		while(i < 16) do
+ 			protable = PROCESS_TABLE + 16*i;
+ 			alias state R9;
+ 		  	state = [protable + 4]; 
+
+ 			if(([protable + 6] == 1) || (state == TERMINATED) || (state == RUNNING) || (state == ALLOCATED)) then
+ 				i = i + 1;
+ 				continue;
+ 			endif;
+
+ 			if([protable + 6] == 0) then
+ 				if([protable] > max_tick) then
+ 					max_tick = [protable];
+ 					swap_out_pid = i;
+ 				endif;
+ 			endif;
+
+ 			i = i + 1;
+ 		endwhile;
+ 	endif;
+
+ 	//if still no process to be swapped out is found
+ 	if(swap_out_pid == -1) then
+ 		[SYSTEM_STATUS_TABLE + 5] = 0;	//set the paging status to 0
+ 		return;
+ 	endif;
+
+ 	//process to be swapped out is swap_out_pid
+ 	alias swap_protable R10;
+ 	alias swap_pageTable R11;
+
+ 	swap_protable = PROCESS_TABLE + 16*swap_out_pid;
+ 	swap_pageTable = PAGE_TABLE_BASE + 20*swap_out_pid;
+
+ 	[swap_protable] = 0;	//set the tick field to 0
+
+ 	//iterate through the page table entries to check if heap and stack can be deallocated
+
+ 	i = 4;
+ 	while(i<20) do
+ 		alias page R12;
+ 		page = [swap_pageTable + i];
+
+ 		if(page == -1) then
+ 			i = i + 2;
+ 			continue;
+ 		endif;
+
+ 		if(i>=8 && i<=14) then
+ 			backup;
+ 			R1 = RELEASE_PAGE;
+ 			R2 = [swap_pageTable + i];
+ 			call MOD_2;
+ 			restore;
+
+ 			[swap_pageTable + i] = -1;
+ 			[swap_pageTable + i + 1] = "0000";
+ 		endif;
+
+ 		if((i>=16) || ((i<=7) && [MEMORY_FREE_LIST + page] == 1)) then	//check for stack and non shared heap pages
+ 			alias block R13;
+
+ 			multipush(R2,R5,R6,R7,R8,R9,R10,R11,R12);
+ 			R1 = GET_SWAP_BLOCK;
+ 			call MOD_2;
+ 			block = R0;
+ 			multipop(R2,R5,R6,R7,R8,R9,R10,R11,R12);
+
+ 			[DISK_MAP_TABLE + swap_out_pid*10 + (i/2)] = block;
+
+ 			backup;
+ 			R1 = DISK_STORE;
+ 			R2 = pid;
+ 			R3 = page;
+ 			R4 = block;
+ 			call MOD_4;
+ 			restore;
+
+ 			backup;
+ 			R1 = RELEASE_PAGE;
+ 			R2 = page;
+ 			call MOD_2;
+ 			restore;
+ 			
+ 			[swap_pageTable + i] = -1;
+ 			[swap_pageTable + i + 1] = "0000";
+
+ 		endif;
+
+ 		i = i + 2;	
+ 	endwhile;
+
+ 	[SYSTEM_STATUS_TABLE + 4] = [SYSTEM_STATUS_TABLE + 4] + 1;	//increment swapped out count
+ 	[SYSTEM_STATUS_TABLE + 5] = 0;	//reset the PAGING_STATUS
+ 	[swap_protable + 6] = 1;
+ 	
+ 	return;	
+
+endif;
+
+//---------------------------------------------------------------------------------------------------------------------------
+
+
+//---------------------------------------------------------SWAP IN------------------------------------------------------------
+
+if(func == SWAP_IN) then
+	alias i R5;
+	i = 0;
+
+	alias swap_in_pid R6;
+	swap_in_pid = -1;
+
+	//loop through the process table entries to find the process with max tick
+	alias max_tick R7;
+	max_tick = 0;
+
+	i = 3;
+	while(i<15) do
+		alias protable R8;
+		protable = PROCESS_TABLE + 16*i;
+		if([protable + 6] == 1 && ([protable] > max_tick)) then
+			max_tick = [protable];
+			swap_in_pid = i;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	if(swap_in_pid == -1) then
+		[SYSTEM_STATUS_TABLE + 5] = 0;
+		R0 = -1;
+		return;
+	endif;
+
+	alias swap_protable R9;
+	alias swap_pageTable R10;
+	alias disk_map_table R11;
+
+	swap_protable = PROCESS_TABLE + swap_in_pid*16;
+	swap_pageTable = PAGE_TABLE_BASE + 20*swap_in_pid;
+	disk_map_table = DISK_MAP_TABLE + 10*swap_in_pid;
+
+	[swap_protable] = 0;	//set the tick field to 0
+
+	i = 2;
+	while(i<10) do
+		if(i>=4 && i<=7) then
+			i = i + 1;
+			continue;
+		endif;
+
+		alias block R12;
+		block = [disk_map_table + i];
+
+		if(block == -1) then
+			i = i + 1;
+			continue;
+		endif;
+
+		alias page R13;
+
+		multipush(R2,R5,R6,R7,R8,R9,R10,R11,R12);
+		R1 = GET_FREE_PAGE;
+		call MOD_2;
+		page = R0;
+		multipop(R2,R5,R6,R7,R8,R9,R10,R11,R12);
+
+		backup;
+		R1 = DISK_LOAD;	//load the stack and heap blocks back into the memory
+		R2 = pid;
+		R3 = page;
+		R4 = block;
+		call MOD_4;
+		restore;
+
+		backup;
+		R1 = RELEASE_BLOCK;	//free the blocks used for storing heap and stack
+		R2 = block;
+		call MOD_2;
+		restore;
+
+		[swap_pageTable + 2*i] = page;
+		[swap_pageTable + 2*i + 1] = "0110";
+
+		[disk_map_table + i] = -1;
+		i = i + 1;
+	endwhile;
+
+	[SYSTEM_STATUS_TABLE + 5] = 0;
+	[SYSTEM_STATUS_TABLE + 4] = [SYSTEM_STATUS_TABLE + 4] - 1;	//decrement number of swapped out processes
+	[swap_protable + 6] = 0;
+	return;
+
+endif;
+
+//----------------------------------------------------------------------------------------------------------------------------
+return;

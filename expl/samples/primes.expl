@@ -1,0 +1,26 @@
+int main()
+{
+	decl
+		int i,j,flag,tmp;
+	enddecl
+	
+	begin
+		i=100;
+		while(i<=200)do
+			flag=0;
+			j=2;
+			while(j<i) do
+				if((i%j)==0) then
+					flag=1;
+				endif;
+				j=j+1;
+			endwhile;
+			if(flag==0) then
+				tmp = exposcall("Write",-2,i);
+			endif;
+			i=i+1;
+		endwhile;
+		return 0;
+	end
+					
+}

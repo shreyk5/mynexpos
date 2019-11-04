@@ -1,0 +1,89 @@
+//Login has system call number 27
+//Login system call can only be invoked from Login process(PID = 1)
+//two arguments are UserName(String) and unencrypted password(String)
+
+//return 0 if success
+//return -1 if invalid username or password
+//return -2 if permission denied
+
+alias curr_pid R5;
+curr_pid = [SYSTEM_STATUS_TABLE + 5*CORE + 1]; 
+
+[PROCESS_TABLE + curr_pid * 16 + 9] = 27;	//set the mode flag
+
+alias userSP R6;
+userSP = SP;
+
+[PROCESS_TABLE + curr_pid * 16 + 13] = SP;	//save SP into UPTR
+SP = [PROCESS_TABLE + curr_pid * 16 + 11] * 512 - 1;	//change to kernel stack
+
+alias RetAddr R7;
+RetAddr = [PTBR + 2 * ((userSP - 1)/512)] * 512 + (userSP - 1) % 512;
+
+alias UserName R8;
+UserName = [[PTBR + 2 * ((userSP - 4) / 512)] * 512 + (userSP - 4) % 512];
+
+alias password R9;
+password = [[PTBR + 2 * ((userSP - 3) / 512)] * 512 + (userSP - 3) % 512];
+
+encrypt password;
+
+if(curr_pid != 1) then	//login is not called from login process
+	[RetAddr] = -2;	
+	SP = [PROCESS_TABLE + curr_pid * 16 + 13];
+	[PROCESS_TABLE + curr_pid * 16 + 9] = 0;	//reset the mode flag
+
+	ireturn;
+endif;
+
+//get the user table entry corresponding to the given username
+alias i R10;
+i = 0;
+
+alias userID R11;
+userID = -1;
+
+while(i < MAX_USER_NUM) do
+	if(UserName == [USER_TABLE + 2*i]) then
+		userID = i;
+
+		if([USER_TABLE + 2*i + 1] != password) then	//password does not match
+			[RetAddr] = -1;	
+			SP = [PROCESS_TABLE + curr_pid * 16 + 13];
+			[PROCESS_TABLE + curr_pid * 16 + 9] = 0;	//reset the mode flag
+			ireturn;
+		endif;
+
+		break;
+	endif;
+	i = i + 1;
+endwhile;
+
+if(userID == -1) then	//there is no user table entry
+	[RetAddr] = -1;	
+	SP = [PROCESS_TABLE + curr_pid * 16 + 13];
+	[PROCESS_TABLE + curr_pid * 16 + 9] = 0;	//reset the mode flag
+
+	ireturn;
+endif;
+
+//set the process table entries for shell process(PID = 2)
+[PROCESS_TABLE + 2*16 + 4] = CREATED;
+[PROCESS_TABLE + 2*16 + 3] = userID;
+
+//set the login process to wait for this shell
+[PROCESS_TABLE + 1*16 + 4] = WAIT_PROCESS;
+[PROCESS_TABLE + 1*16 + 5] = 2;
+
+//set the current userID in system status table
+[SYSTEM_STATUS_TABLE] = userID;
+
+backup;
+call MOD_5;
+restore;
+
+[RetAddr] = 0;	//success
+[PROCESS_TABLE + curr_pid*16 + 9] = 0;	//reset the mode flag
+SP = [PROCESS_TABLE + curr_pid*16 + 13];
+
+ireturn;

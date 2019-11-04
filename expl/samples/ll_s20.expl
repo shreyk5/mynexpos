@@ -1,0 +1,74 @@
+type
+	node
+	{
+		int data;
+		node next;
+	}
+endtype
+
+int main()
+{
+	decl
+		node head,curr,x;
+		str msg;	
+		int ret,tmp,n,i;
+	enddecl
+	
+	begin
+		//heap area of the process should be initialiazed before first use of alloc
+		//ret = initialize();	this also works
+		ret = exposcall("Heapset"); 
+		head = exposcall("Alloc",2);
+		head = null;
+		
+		i = 1;
+		while(i<=100) do
+			x = exposcall("Alloc",2);
+			x.data = i;
+			x.next = null;
+			
+			if(head==null) then
+				head = x;
+				curr = head;
+			else
+				curr.next = x;
+				curr = curr.next;
+			endif;
+			i = i + 1;	
+		endwhile;
+		
+		ret = exposcall("Fork");
+			
+		if(ret==0) then
+			msg = "child";
+			ret = exposcall("Write",-2,msg);	
+			curr = head;
+			while(curr!=null) do
+				tmp = curr.data;
+				ret = exposcall("Write",-2,tmp);
+				curr = curr.next;
+				if(curr==null) then
+					break;
+				endif;
+				curr = curr.next;
+			endwhile;
+		else
+			msg = "parent";
+			ret = exposcall("Write",-2,msg);
+			curr = head.next;
+			while(curr!=null) do
+				tmp = curr.data;
+				ret = exposcall("Write",-2,tmp);
+				curr = curr.next;
+				if(curr==null) then
+					break;
+				endif;
+				curr = curr.next;
+			endwhile;
+		endif;
+		
+	
+		return 0;
+	end	
+
+}

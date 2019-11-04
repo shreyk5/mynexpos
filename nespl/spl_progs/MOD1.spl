@@ -1,0 +1,228 @@
+//---------------------------PROCESS MANAGER MODULE------------------------
+
+// R1 contains function num and R2 contains PID
+
+if(R1 == FREE_USER_AREA_PAGE) then	// free user area page
+	//get the user area page using PID
+
+	//go through resource table entries and release the semaphores used by the process
+	backup;
+	alias i R5;
+	i = 496;
+	alias user_area_page R6;
+	user_area_page = [PROCESS_TABLE + R2*16 + 11];
+	while(i<512) do
+		if([user_area_page*512 + i] == SEMAPHORE) then
+			backup;
+			R1 = RELEASE_SEMAPHORE;
+			R3 = R2;	//PID of the process
+			R2 = [user_area_page*512 + i + 1];  //semaphore table index
+			call MOD_0;
+			restore;
+		endif;
+
+		if([user_area_page*512 + i] == FILE) then
+			backup;
+			R1 = CLOSE;
+			R2 = [user_area_page*512 + i + 1];	//OPEN file table index
+			call MOD_3;
+			restore;
+		endif;
+
+		[user_area_page*512 + i] = -1;
+		i = i + 2;
+	endwhile;
+	restore; 
+
+	backup;
+	R1 = RELEASE_PAGE;
+	R2 = [PROCESS_TABLE + R2*16 + 11]; //user area page
+	call MOD_2;
+	restore;
+
+	return;
+endif;
+
+
+if(R1 == EXIT_PROCESS) then	// exit process
+	
+	//------------------------------wake up the processes which were waiting for this process----------------------------
+	backup;
+	if([PROCESS_TABLE+R2*16+9]!=9) then //Exit was not called from EXEC
+		alias i R4;
+		i = 0;
+		while(i<16) do
+			if([PROCESS_TABLE+i*16+4] == WAIT_PROCESS && [PROCESS_TABLE+i*16+5] == R2) then
+				[PROCESS_TABLE+i*16+4] = READY;
+			endif;
+			
+			if([PROCESS_TABLE+i*16+2] == R2) then	//checking the ppid of each process
+				[PROCESS_TABLE+i*16+2] = -1;	//indicating that child process has become orphan
+			endif;
+			i = i + 1;
+		endwhile;
+	endif;
+	restore;
+	//--------------------------------------------------------------------------------------------------------------------
+	backup;
+
+	alias pid R3;
+	pid = R2;
+		
+	R1 = FREE_PAGE_TABLE;
+	R2 = pid;
+	call MOD_1;
+
+	R1 = FREE_USER_AREA_PAGE;	
+	R2 = pid;
+	call MOD_1;
+	
+	restore;
+		
+	[PROCESS_TABLE+R2*16+4] = TERMINATED;
+	//print(R2);
+	return;
+endif;
+
+if(R1 == FREE_PAGE_TABLE) then	// free page table
+	backup;
+	alias i R3;
+	alias pid R4;
+	i = 4;
+	pid = R2;
+
+	//invalidate the page table entries for the library without releasing
+	[PAGE_TABLE_BASE+20*pid+0] = -1;
+	[PAGE_TABLE_BASE+20*pid+1] = "0000";
+	[PAGE_TABLE_BASE+20*pid+2] = -1;
+	[PAGE_TABLE_BASE+20*pid+3] = "0000";
+	
+	while(i<20) do
+		if([PAGE_TABLE_BASE + 20*pid + i] != -1) then
+			backup;
+			R1 = RELEASE_PAGE;
+			R2 = [PAGE_TABLE_BASE + 20*pid + i];
+			call MOD_2;
+			restore;
+			[PAGE_TABLE_BASE + 20*pid + i] = -1;
+			[PAGE_TABLE_BASE + 20*pid + i+1] = "0000";
+		endif;	
+		i = i + 2;
+	endwhile;
+	
+	//check heap and stack entries in disk map table	
+	alias disk_table R5;
+	disk_table = DISK_MAP_TABLE+pid*10;
+	
+	if([disk_table+2]!=-1) then
+		backup;
+		R1 = RELEASE_BLOCK;
+		R2 = [disk_table+2];
+		R3 = pid;
+		call MOD_2;
+		restore;
+	endif;
+	
+	if([disk_table+3]!=-1) then
+		backup;
+		R1 = RELEASE_BLOCK;
+		R2 = [disk_table+3];
+		R3 = pid;
+		call MOD_2;
+		restore;
+	endif;
+	
+	if([disk_table+8]!=-1) then
+		backup;
+		R1 = RELEASE_BLOCK;
+		R2 = [disk_table+8];
+		R3 = pid;
+		call MOD_2;
+		restore;
+	endif;
+	
+	if([disk_table+9]!=-1) then
+		backup;
+		R1 = RELEASE_BLOCK;
+		R2 = [disk_table+9];
+		R3 = pid;
+		call MOD_2;
+		restore;
+	endif;	
+	
+	//invalidate the disk map table entries
+	i = 0;
+	while(i<10) do
+		[disk_table+i] = -1;
+		i = i + 1;
+	endwhile;
+		
+	restore;
+	return;	
+endif;
+
+if(R1 == GET_PCB_ENTRY) then
+	multipush(R5);
+	alias i R5;
+	i = 0;
+	R0 = -1;
+	while(i<16) do
+		if([PROCESS_TABLE+16*i+4] == TERMINATED) then
+			R0 = i;
+			[PROCESS_TABLE+16*i+4] = ALLOCATED;
+			[PROCESS_TABLE+16*i+1] = i;
+			[PROCESS_TABLE+16*i+14] = PAGE_TABLE_BASE+i*20;
+			[PROCESS_TABLE+16*i+15] = 10;
+			//multipop(R5);
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+	multipop(R5);
+	return;
+endif;
+
+if(R1 == KILL_ALL) then
+	alias curr_pid R2;
+	
+	alias i R6;
+	i = 0;
+	while(i < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*i + 1] != -1) then
+			backup;
+			R1 = ACQUIRE_INODE;
+			R2 = curr_pid;
+			R3 = i;
+			call MOD_0;
+			restore;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	i = 2;
+	while(i<15) do    //exit should not be called on swapper daemon 
+		if(i != curr_pid && [PROCESS_TABLE + 16*i + 4] != TERMINATED) then
+			backup;
+			R1 = EXIT_PROCESS;
+			R2 = i;
+			call MOD_1;
+			restore;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	i = 0;
+	while(i < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*i + 1] != -1) then
+			backup;
+			R1 = RELEASE_INODE;
+			R2 = curr_pid;
+			R3 = i;
+			call MOD_0;
+			restore;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	return;
+endif;

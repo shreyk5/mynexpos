@@ -1,0 +1,36 @@
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+9]=5;
+alias user_sp R0;
+user_sp = SP;
+
+// finding file descriptor
+alias physical_page_num R1;
+alias offset R2;
+alias file_descriptor_physicalAddress R3;
+physical_page_num = [PTBR+2*((user_sp-4)/512)];
+offset = (user_sp-4)%512;
+file_descriptor_physicalAddress = (physical_page_num*512)+offset;
+
+alias file_descriptor R4;
+file_descriptor = [file_descriptor_physicalAddress];
+
+if (file_descriptor != -2)
+then
+	 alias physicalAddrRetVal R5;
+	 physicalAddrRetVal = ([PTBR + 2 * ((user_sp - 1) / 512)] * 512) + ((user_sp - 1) % 512);
+	 [physicalAddrRetVal] = -1;
+else
+	alias word R5;
+	word = [[PTBR + 2 * ((user_sp - 3) / 512)] * 512 + ((user_sp - 3) % 512)];
+	
+	print word;
+	
+	alias physicalAddrRetVal R6;
+	physicalAddrRetVal = ([PTBR + 2*(user_sp-1)/512]*512) + ((user_sp-1)%512);
+[physicalAddrRetVal] = 0;
+
+endif;
+
+SP = user_sp;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+
+ireturn;

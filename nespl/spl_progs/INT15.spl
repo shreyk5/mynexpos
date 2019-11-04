@@ -1,0 +1,79 @@
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 21;	//sys call no of shutdown
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13] = SP; //save the SP into UPTR
+SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512 - 1; //change SP to kernel stack
+
+alias userSP R1;
+userSP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+	
+//Shutdown system call can be invoked only from the shell process of the root user
+
+if([PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 1] != 2 || [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 3] != 1) then
+	[[PTBR + 2*((userSP-1)/512)]*512 + (userSP-1) % 512] = -1;	//not allowed	
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//set mode flag to 0
+	SP = userSP;
+
+	ireturn;
+endif;
+
+backup;
+R1 = KILL_ALL;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+call MOD_1;
+restore;
+
+alias i R7;
+i = 0;
+
+while(i < 4) do
+	if([BUFFER_TABLE + 4*i + 1] == 1) then
+		R1 = DISK_STORE;
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+		R3 = (71 + i);
+		R4 = [BUFFER_TABLE + 4*i];
+		call MOD_4;
+	endif;
+	i = i + 1;
+endwhile;
+
+alias page_num R5;
+alias block_num R6;
+
+//----------store the memory copy of inode table and user table into disk------------------------
+page_num = 59;
+block_num = 3;
+R1 = DISK_STORE;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = page_num;
+R4 = block_num;
+call MOD_4;
+
+page_num = 60;
+block_num = 4;
+R1 = DISK_STORE;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = page_num;
+R4 = block_num;
+call MOD_4;
+//------------------------------------------------------------------------------------------------
+
+//---------------------store the memory copy of disk free list into disk--------------------------
+page_num = 61;
+block_num = 2;
+R1 = DISK_STORE;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = page_num;
+R4 = block_num;
+call MOD_4;
+//--------------------------------------------------------------------------------------------------
+
+//---------------------store the memory copy of root file into disk---------------------------------
+page_num = 62;
+block_num = 5;
+R1 = DISK_STORE;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = page_num;
+R4 = block_num;
+call MOD_4;
+//--------------------------------------------------------------------------------------------------
+
+halt;

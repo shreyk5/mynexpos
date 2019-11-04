@@ -1,0 +1,55 @@
+//---------------------------PROCESS MANAGER MODULE------------------------
+
+// R1 contains function num and R2 contains PID
+
+if(R1 == FREE_USER_AREA_PAGE) then	// free user area page
+	//get the user area page using PID
+	backup;
+	R1 = RELEASE_PAGE;
+	R2 = [PROCESS_TABLE + R2*16 + 11]; //user area page
+	call MOD_2;
+	restore;
+	return;
+endif;
+
+
+if(R1 == EXIT_PROCESS) then	// exit process
+	backup;
+
+	alias pid R3;
+	pid = R2;
+		
+	R1 = FREE_USER_AREA_PAGE;
+	R2 = pid;
+	call MOD_1;
+
+	R1 = FREE_PAGE_TABLE;	
+	R2 = pid;
+	call MOD_1;
+
+	restore;
+	[PROCESS_TABLE+R2*16+4] = TERMINATED;
+	return;
+endif;
+
+if(R1 == FREE_PAGE_TABLE) then	// free page table
+	backup;
+	alias i R3;
+	alias pid R4;
+	i = 0;
+	pid = R2;
+	
+	while(i<20) do
+		if([PTBR + 20*pid + i] != -1) then
+			R1 = RELEASE_PAGE;
+			R2 = [PTBR + 20*pid + i];
+			call MOD_2;
+			[PTBR + 20*pid + i] = -1;
+			[PTBR + 20*pid + i+1] = "0000";
+		endif;	
+		i = i + 2;
+	endwhile;
+	
+	restore;
+	return;	
+endif;

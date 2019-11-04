@@ -1,0 +1,35 @@
+alias functionNum R1;
+alias curr_pid R2;
+
+if(functionNum == 8) then
+	while([TERMINAL_STATUS_TABLE] == 1) do //check if terminal is already in use
+		[PROCESS_TABLE+curr_pid*16+4] = WAIT_TERMINAL;
+		backup;
+		call MOD_5;	//schedule some other process while curr process is waiting for terminal to be freed
+		restore;
+	endwhile;
+	[TERMINAL_STATUS_TABLE] = 1;	//give the terminal to this process
+	[TERMINAL_STATUS_TABLE+1] = curr_pid;
+	breakpoint;
+	return;
+endif;
+
+if(functionNum == 9) then
+	if(curr_pid != [TERMINAL_STATUS_TABLE+1]) then
+		R0 = -1;
+		return;
+	endif;
+	
+	[TERMINAL_STATUS_TABLE] = 0;	//free the terminal
+	
+	alias i R7;
+	i = 0;
+	while(i<16) do
+		if([PROCESS_TABLE+i*16+4] == WAIT_TERMINAL) then
+			[PROCESS_TABLE+i*16+4] = READY;	//set status of all processes who were waiting for terminal as READY
+		endif;
+		i = i + 1;
+	endwhile;
+	R0 = 0; //successful 
+	return;	
+endif;

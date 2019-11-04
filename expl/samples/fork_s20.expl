@@ -1,0 +1,29 @@
+int main(){
+decl
+
+	int tmp,ret;
+	str msg;
+
+enddecl
+
+begin
+	tmp = exposcall("Fork");
+	ret = exposcall("Write",-2,tmp);
+	if(tmp == -1) then
+		msg = "fork aborted";
+		tmp = exposcall("Write",-2,msg);
+	
+	else
+		if(tmp == 0) then //child process
+			msg = "child";
+			tmp = exposcall("Write",-2,msg);
+			tmp = exposcall("Exec","Odd.xsm");		
+		else
+			msg = "parent";
+                        tmp = exposcall("Write",-2,msg);
+			tmp = exposcall("Exec","Even.xsm");
+		endif;
+	endif;
+	return 0;
+end
+}

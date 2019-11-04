@@ -1,0 +1,79 @@
+//UPTR of currently running process is saved
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1]*16) + 11] * 512 - 1;
+
+//save context of the currently running process
+backup;
+
+alias curr_pid R5;
+curr_pid = [SYSTEM_STATUS_TABLE + 1];
+
+alias i R6;
+i = 0;
+
+if([SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is initiated
+	if(curr_pid == SWAPPER_DAEMON && [SYSTEM_STATUS_TABLE + 5] == SWAP_OUT) then
+		backup;
+		R1 = SWAP_OUT;	//no return value
+		R2 = curr_pid;
+		call PAGER_MODULE;	
+		restore;
+	else
+		if(curr_pid == SWAPPER_DAEMON && [SYSTEM_STATUS_TABLE + 5] == SWAP_IN) then
+			backup;
+			R1 = SWAP_IN;	//no return value
+			R2 = curr_pid;
+			call PAGER_MODULE;	
+			restore;
+		endif;
+	endif;
+else	//swapping is not on now check if it should be initiated
+
+	if([SYSTEM_STATUS_TABLE + 2] < MEM_LOW) then
+		// print "Alert";
+		// print [SYSTEM_STATUS_TABLE + 2];
+		[SYSTEM_STATUS_TABLE + 5] = SWAP_OUT;	//swap out is needed
+	else
+
+		if([SYSTEM_STATUS_TABLE + 4] != 0) then	//there are swapped out processes
+			i = 3;
+			while(i<15) do
+				alias protable R7;
+				protable = PROCESS_TABLE + 16*i;
+				if([protable + 6] == 1 && [protable] > MAX_TICK) then	//process is swapped out and has been in swapped out state for a long time
+					[SYSTEM_STATUS_TABLE + 5] = SWAP_IN;
+					break;
+				endif;
+				i = i + 1;
+			endwhile;
+
+			if(i==15 && [SYSTEM_STATUS_TABLE + 2] > MEM_HIGH) then	//lot of free memory pages
+				[SYSTEM_STATUS_TABLE + 5] = SWAP_IN;
+			endif;
+		endif;
+
+	endif;
+endif;
+
+
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+4] = READY;
+//currently running process is set to be READY
+
+i = 0;
+
+while(i < 16) do
+	if([PROCESS_TABLE + (i*16)+4] != TERMINATED) then
+		[PROCESS_TABLE + (i*16)] = [PROCESS_TABLE + (i*16)] + 1;	//increment the tick
+	endif;
+	i = i + 1;
+endwhile;
+
+call MOD_5;	//scheduler program is called
+
+restore;	//restore context of new process
+
+//SP is set to user stack pointer of new process
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+1]*16) + 13];
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+1]*16) + 9] = 0; // mode is set to 0
+
+ireturn;

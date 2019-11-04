@@ -1,0 +1,91 @@
+//Sys calls Getpid, Getppid, Wait and Signal are implemented in the interrupt routine 11
+//they have 11,12,13,14 as their sys call numbers
+
+alias userSP R1;
+userSP = SP;
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13] = SP;			//save the SP into UPTR
+SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512-1;	//change to kernel stack
+
+alias syscall R2;
+syscall = [[PTBR+2*((userSP-5)/512)]*512 + ((userSP-5)%512)]; 
+
+//-----------------------------------------Return PID-------------------------------------------------
+if(syscall==11) then
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 11;	//set the mode flag
+
+	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+1];//store the pid in the stack
+	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];	//change to user stack
+
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
+
+	ireturn;
+endif;
+//-------------------------------------------------------------------------------------------------------
+
+//---------------------------------------Return PPID-----------------------------------------------------
+if(syscall==12) then
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 12;	//set the mode flag
+
+	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+2]; //store the ppid in the stack
+	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
+
+	ireturn;
+endif;
+//-------------------------------------------------------------------------------------------------------
+
+//------------------------------------wait system call---------------------------------------------------
+//takes PID of a process (for which the given process will wait) as an argument
+if(syscall==13) then
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 13;	//set the mode flag
+
+	alias pid R3;
+	pid = [[PTBR+2*((userSP-4)/512)]*512 + ((userSP-4)%512)];	//extract the pid for which the current process must wait 
+
+	if((pid==[SYSTEM_STATUS_TABLE+1]) || (pid>=16) || (pid<0) || ([PROCESS_TABLE+16*pid+4]==TERMINATED)) then
+		//set the return value to -1
+		[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = -1;
+		[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;
+		SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+		ireturn;
+	endif;
+
+	//arguments are passed correctly
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+4] = WAIT_PROCESS;
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+5] = pid;
+
+	backup;
+	call MOD_5;	//schedule other processes
+	restore;
+
+	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = 0;	//save the return value in the stack
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
+	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];	//change to user stack
+	ireturn;	
+
+endif; 
+//--------------------------------------------------------------------------------------------------------
+
+//----------------------------------------signal system call----------------------------------------------
+//no arguments are passed. all the process tables are checked if some process is waiting for current process
+if(syscall==14) then
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 14;	//set the mode flag
+	alias i R5;
+	i = 0;
+	while(i<16) do
+		if([PROCESS_TABLE+i*16+4]==WAIT_PROCESS && [PROCESS_TABLE+i*16+5]==[SYSTEM_STATUS_TABLE+1]) then
+			[PROCESS_TABLE+i*16+4] = READY;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = 0;	//save the return value in the stack
+	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
+	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 13];	//change to user stack
+	ireturn;
+endif;
+//---------------------------------------------------------------------------------------------------------
+
+SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
+ireturn;

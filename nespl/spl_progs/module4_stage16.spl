@@ -1,0 +1,46 @@
+alias functionNum R1;
+alias curr_pid R2;
+alias word R3;
+
+//----------------------------TERMINAL WRITE----------------------------------
+if(functionNum==3) then
+	backup;
+	// call acquire terminal using function no. 8 in R1 and pid in R2
+	R1 = 8;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+	
+	print word;	//terminal has been acquired
+	
+	backup;
+	// call release terminal using function no. 9 in R1 and pid in R2
+	R1 = 9;
+	R2 = curr_pid;
+	call MOD_0;
+	restore;
+endif;
+//------------------------END OF TERMINAL WRITE----------------------------
+
+
+//--------------------------TERMINAL READ-----------------------------------
+if(functionNum==4) then
+	backup;
+	R1 = 8;
+	R2 = [SYSTEM_STATUS_TABLE+1];
+	call MOD_0;	//call acquire terminal
+	restore;
+	
+	read;
+	[PROCESS_TABLE+16*curr_pid+4] = WAIT_TERMINAL;
+	backup;		//save context
+	breakpoint;
+	call MOD_5;	//schedule another process
+	restore;	//restore context
+	
+	[ [PTBR+(2*(word)/512)]*512 + word%512] = [PROCESS_TABLE+curr_pid*16+8];
+endif;
+//------------------------END OF TERMINAL READ------------------------------
+return;
+	
+			

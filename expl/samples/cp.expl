@@ -1,0 +1,29 @@
+int main()
+{
+	decl
+		int tmp, fileDesc1, fileDesc2;
+		str fileName1,fileName2, word;
+	enddecl
+
+	begin
+		tmp = exposcall("Read",-1,fileName1);
+		tmp = exposcall("Read",-1,fileName2);
+
+		fileDesc1 = exposcall("Open",fileName1);
+		tmp = exposcall("Create",fileName2,1);
+		fileDesc2 = exposcall("Open",fileName2);
+
+		while(1 == 1) do
+			tmp = exposcall("Read",fileDesc1,word);
+			if(tmp == -2) then
+				break;
+			endif;
+
+			tmp = exposcall("Write",fileDesc2,word);
+		endwhile;
+
+		tmp = exposcall("Close",fileName1);
+		tmp = exposcall("Close",fileName2);
+		return 0;
+	end
+}

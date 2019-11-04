@@ -1,0 +1,161 @@
+//------------------------------read system call---------------------------------------
+//return 0 if success
+//return -1 if file desc is invalid
+//return -2 if file pointer has reached end of file
+
+alias userSP R10;
+alias curr_pid R1;
+
+curr_pid = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+[PROCESS_TABLE+curr_pid*16+9] = 7; //set the mode flag to 7(read sys call no.)
+
+userSP = SP;
+
+//save the SP in UPTR of current process
+[PROCESS_TABLE+curr_pid*16+13] = SP;
+
+//change SP to kernel stack pointer
+SP = [PROCESS_TABLE+curr_pid*16+11]*512-1;
+
+//retrieve file descriptor from the user stack
+alias fileDescLogicalAddress R2;
+alias logicalPage R3;
+alias fileDescPhyAddress R4;
+alias offset R5;
+
+fileDescLogicalAddress = userSP-4;
+logicalPage = fileDescLogicalAddress/512;
+offset = fileDescLogicalAddress % 512;
+
+fileDescPhyAddress = [PTBR+logicalPage*2]*512 + offset;
+
+alias fileDesc R6;
+alias RetAddress R7;
+fileDesc = [fileDescPhyAddress];
+RetAddress = [PTBR+2*(userSP-1)/512]*512 + ((userSP-1)%512);
+
+alias word_address R8;
+alias word R9;	//logical address where the word to be read is stored
+	
+word_address = [PTBR+2*(userSP-3)/512]*512+(userSP-3)%512;
+word = [word_address];
+
+if(fileDesc != -1) then
+	alias userAreaPage R11;
+	userAreaPage = [PROCESS_TABLE + curr_pid*16 + 11];
+	
+	//print "FileDesc:";	
+	//print fileDesc;
+	//check for validity of file desc
+	if(fileDesc<0 || fileDesc>=8 || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
+		[RetAddress] = -1;	//return -1
+		[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+		SP = userSP;
+		ireturn;						
+	endif;
+
+	alias open_ft_idx R12;
+	open_ft_idx = [userAreaPage*512 + 496 + 2*fileDesc + 1];
+
+	alias inode_idx R13;
+	inode_idx = [OPEN_FILE_TABLE + 4*open_ft_idx];
+	
+	//lock the file by acquiring inode
+	multipush(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = inode_idx;	
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13);
+
+	if(R0 == -1) then
+		[RetAddress] = -1;	//return -1
+		[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+		SP = userSP;
+		ireturn;
+	endif;
+
+	alias LSeek R14;
+	LSeek = [OPEN_FILE_TABLE + 4*open_ft_idx + 2];
+	//print LSeek;
+	if([OPEN_FILE_TABLE + 4*open_ft_idx] == INODE_ROOT) then
+		//Reading from the root file does not require a buffer, as root file is already loaded into memory
+		//root file size is 480
+		if(LSeek == 480) then
+			backup;
+			R1 = RELEASE_INODE;
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+			R3 = inode_idx;
+			call MOD_0;
+			restore;
+
+			[RetAddress] = -2;	//file ptr has reahced EOF
+			[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+			SP = userSP;
+			ireturn;
+		endif;
+
+		//read the word at lseek position
+		[[PTBR + 2*(word)/512]*512 + (word)%512] = [ROOT_FILE + LSeek];
+
+		//increment the LSEEK position
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = [OPEN_FILE_TABLE + 4*open_ft_idx + 2] + 1;
+
+	else
+		alias fileSize R15;
+		fileSize = [INODE_TABLE + inode_idx*16 + 2];
+		//print "FileSize:";
+		//print fileSize;
+
+		if(LSeek == fileSize) then
+			backup;
+			R1 = RELEASE_INODE;
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+			R3 = inode_idx;
+			call MOD_0;
+			restore;
+
+			[RetAddress] = -2;	//file ptr has reahced EOF
+			[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+			SP = userSP;
+			ireturn;
+                endif;
+		
+		//print "hey";	
+		backup;
+		R1 = BUFFERED_READ;
+		R2 = [INODE_TABLE + 16*inode_idx + 8 + (LSeek/512)]; //disk block num
+		R3 = LSeek % 512;
+		R4 = [PTBR + 2*(word)/512]*512 + (word)%512;
+		call MOD_3;
+		restore;
+
+		//increment the LSEEK value
+		[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = [OPEN_FILE_TABLE + 4*open_ft_idx + 2] + 1;
+		//print [OPEN_FILE_TABLE + 4*open_ft_idx + 2]; 
+	endif;
+
+	backup;
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = inode_idx;
+	call MOD_0;
+	restore;
+
+	[RetAddress] = 0;	//success
+
+else
+	
+	backup;
+	R1 = 4;		//function number for terminal read
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = word;
+	call MOD_4;
+	restore;
+	
+	[RetAddress] = 0;
+endif;
+
+[PROCESS_TABLE+curr_pid*16+9] = 0;
+SP = userSP;
+ireturn;

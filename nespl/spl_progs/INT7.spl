@@ -1,0 +1,168 @@
+//---------------------------------------------------WRITE--------------------------------------------------
+//arguments are file desc and word to be written
+//return -1 if file desc is invalid
+//return -2 if disk/file full
+//return -3 if permission denied
+
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9]=5;
+alias user_sp R6;
+user_sp = SP;
+
+[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1]+13] = SP;	// UPTR = SP
+SP = [PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE + 5*CORE + 1]+11]*512 - 1; //change SP to top of kernel stack
+
+alias file_descriptor R7;
+file_descriptor = [[PTBR + 2 * ((user_sp - 4) / 512)] * 512 + ((user_sp - 4) % 512)];
+
+alias physicalAddrRetVal R8;
+physicalAddrRetVal = ([PTBR + 2 * ((user_sp - 1) / 512)] * 512) + ((user_sp - 1) % 512);
+
+if (file_descriptor != -2) then
+	//check for valid file descriptor
+	alias userAreaPage R9;
+	userAreaPage = [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 11];
+
+	if(file_descriptor<0 || file_descriptor>=8 || [userAreaPage*512 + 496 + 2*file_descriptor] != FILE) then
+		[physicalAddrRetVal] = -1;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+		SP = user_sp;
+		ireturn;
+	endif;
+
+	alias open_ft_idx R10;
+	open_ft_idx = [userAreaPage*512 + 496 + 2*file_descriptor + 1];
+
+	alias inode_idx R11;
+	inode_idx = [OPEN_FILE_TABLE + 4*open_ft_idx];
+
+	alias user_ID1 R12;
+	alias user_ID2 R13;
+	user_ID1 = [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 3];
+	user_ID2 = [INODE_TABLE + inode_idx*16 + 3];
+
+	//check for permissions
+	if(user_ID1 != user_ID2 && user_ID1 != 1 && [INODE_TABLE + inode_idx*16 + 3] == EXCLUSIVE) then
+		[physicalAddrRetVal] = -3;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+		SP = user_sp;
+		ireturn;
+	endif;
+
+	multipush(R4,R5,R6,R7,R8,R9,R10,R11,R12,R13);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = inode_idx;
+	call MOD_0;
+	multipop(R4,R5,R6,R7,R8,R9,R10,R11,R12,R13);
+
+	if(R0 == -1) then	//file has been deleted
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		[physicalAddrRetVal] = -1;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+		SP = user_sp;
+		ireturn;
+	endif;
+
+	alias LSeek R14;
+	LSeek = [OPEN_FILE_TABLE + 4*open_ft_idx + 2];
+
+	if(LSeek == MAX_FILE_SIZE) then
+		backup;
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+		R3 = inode_idx;
+		call MOD_0;
+		restore;
+
+		[physicalAddrRetVal] = -2;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+		SP = user_sp;
+		ireturn;
+	endif;
+
+	if(LSeek % 512 == 0 && LSeek == [INODE_TABLE + 16*inode_idx + 2]) then	//new block is to be allocated
+		alias block_num R5;
+
+		multipush(R6,R7,R8,R9,R10,R11,R12,R13,R14);
+		R1 = GET_FREE_BLOCK;
+		call MOD_2;
+		multipop(R6,R7,R8,R9,R10,R11,R12,R13,R14);
+		block_num = R0;
+
+		if(block_num == -1) then
+			backup;
+			R1 = RELEASE_INODE;
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+			R3 = inode_idx;
+			call MOD_0;
+			restore;
+
+			[physicalAddrRetVal] = -2;
+			[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+			SP = user_sp;
+			ireturn;
+		endif;
+
+		[INODE_TABLE + 16*inode_idx + 8 + (LSeek/512)] = block_num;
+	endif;
+
+	alias word R4;
+	word = [[PTBR + 2 * ((user_sp - 3) / 512)] * 512 + ((user_sp - 3) % 512)];
+
+	backup;
+	R1 = BUFFERED_WRITE;
+	R2 = [INODE_TABLE + 16*inode_idx + 8 + (LSeek/512)];
+	R3 = (LSeek % 512);
+	R4 = word;
+	call MOD_3;
+	restore;
+
+	if(LSeek == [INODE_TABLE + 16*inode_idx + 2]) then
+		[INODE_TABLE + 16*inode_idx + 2] = LSeek + 1;
+		[ROOT_FILE + 8*inode_idx + 1] = LSeek + 1;
+	endif;
+	
+	[OPEN_FILE_TABLE + 4*open_ft_idx + 2] = LSeek + 1;	
+	
+	backup;
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = inode_idx;
+	call MOD_0;
+	restore;
+	
+	[physicalAddrRetVal] = 0;
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
+	SP = user_sp;
+	ireturn;
+
+else
+	alias word R5;
+	word = [[PTBR + 2 * ((user_sp - 3) / 512)] * 512 + ((user_sp - 3) % 512)];
+
+	//Registers R1,R2,R3,R4,R5 are used upto now so have to be saved in the stack as they will be used to call module 4(for terminal write)
+	//multipush(R0,R1,R2,R3,R4,R5,R6);
+	backup;
+	R1 = 3;		//The function no. for terminal write is 3
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];	//PID of the process
+	R3 = word; 
+	call MOD_4; //device manager module which contains the terminal write function
+	restore;
+	//multipop(R0,R1,R2,R3,R4,R5,R6); //restore the register contents
+		
+	// alias physicalAddrRetVal R6;
+	// physicalAddrRetVal = ([PTBR + 2*(user_sp-1)/512]*512) + ((user_sp-1)%512);
+	[physicalAddrRetVal] = 0;
+
+endif;
+
+SP = user_sp;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
+
+ireturn;

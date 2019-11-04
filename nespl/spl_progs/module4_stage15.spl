@@ -1,0 +1,25 @@
+alias functionNum R1;
+alias curr_pid R2;
+alias word R3;
+
+if(functionNum==3) then
+	multipush(R0,R1,R2,R3,R4,R5,R6);
+	// call acquire terminal using function no. 8 in R1 and pid in R2
+	R1 = 8;
+	R2 = curr_pid;
+	call MOD_0;
+	multipop(R0,R1,R2,R3,R4,R5,R6);
+	
+	print word;	//terminal has been acquired
+	
+	multipush(R0,R1,R2,R3,R4,R5,R6);
+	// call release terminal using function no. 9 in R1 and pid in R2
+	R1 = 9;
+	R2 = curr_pid;
+	call MOD_0;
+	multipop(R0,R1,R2,R3,R4,R5,R6);
+endif;
+
+return;
+	
+			

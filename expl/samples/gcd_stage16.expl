@@ -1,0 +1,32 @@
+int main()
+{
+	decl
+		int i,j,tmp,t,n,a,b,ans;
+		str prompt;
+	enddecl
+	
+	begin
+		prompt = "Enter 2 nos";
+		tmp = exposcall("Write",-2,prompt);
+		tmp = exposcall("Read",-1,a);
+		tmp = exposcall("Read",-1,b);
+		if(a<b) then
+			t = b;
+			b = a;
+			a = t;
+		endif;
+		
+		while(1==1) do
+			if(b==0) then
+				ans = a;
+				break;
+			endif;
+			t=a;
+			a=b;
+			b=t%b;
+		endwhile;
+		tmp=exposcall("Write",-2,ans);					
+		return 0;
+	end
+}
+

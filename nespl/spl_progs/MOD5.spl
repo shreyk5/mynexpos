@@ -1,0 +1,61 @@
+// get the pid of current running process
+alias curr_pid R0;
+
+curr_pid = [SYSTEM_STATUS_TABLE+1];
+
+multipush(BP);
+
+//save the values of ptbr,ptlr etc into the process table
+[PROCESS_TABLE + curr_pid*16 + 14] = PTBR;
+[PROCESS_TABLE + curr_pid*16 + 15] = PTLR;
+[PROCESS_TABLE + curr_pid*16 + 12] = SP%512;
+
+alias new_pid R1;
+new_pid = 0;	//by default IDLE process
+
+alias i R2;
+i = (curr_pid + 1);
+
+if([SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is going on
+	alias daemon_protable R3;
+	daemon_protable = PROCESS_TABLE + 15*16;
+
+	if(([daemon_protable + 4] == READY) || ([daemon_protable + 4] == CREATED) || ([daemon_protable + 4] == RUNNING)) then
+		new_pid = 15;
+		//print "waitdaemon";
+	else
+		new_pid = 0;
+	endif;
+	
+else
+	while(i<15) do    //do not schedule daemon process in this case
+		alias protable R3;
+		protable = PROCESS_TABLE + i*16;
+		if((([protable + 4] == READY) || ([protable + 4] == CREATED)) && ([protable + 6] != 1)) then
+			new_pid = i;
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+endif;
+
+
+//change the SP to kernel stack of new process
+SP = [PROCESS_TABLE + 16*new_pid + 11]*512 + [PROCESS_TABLE + 16*new_pid + 12]; 
+PTBR = [PROCESS_TABLE + 16*new_pid + 14];
+PTLR = [PROCESS_TABLE + 16*new_pid + 15];
+
+[SYSTEM_STATUS_TABLE + 1] = new_pid;
+
+if([PROCESS_TABLE + new_pid*16 + 4] == CREATED) then
+	BP = [[PROCESS_TABLE + new_pid*16 + 11] * 512];
+	[PROCESS_TABLE + new_pid*16 + 4] = RUNNING;
+	[PROCESS_TABLE + new_pid*16 + 9] = 0;
+	SP = [PROCESS_TABLE + new_pid*16 + 13];
+	ireturn;
+endif;
+
+[PROCESS_TABLE+new_pid*16+4] = RUNNING;
+multipop(BP);
+
+return;

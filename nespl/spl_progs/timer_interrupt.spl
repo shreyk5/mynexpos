@@ -1,0 +1,15 @@
+// Save the current user stack pointer to UPTR
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13] = SP;
+
+// Set SP to user area page number
+SP = [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+11]*512-1;
+
+backup;  // saves user context to the kernel stack
+print "Interrupted";
+print [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+1];
+restore; // restore the user context from the kernel stack
+
+// set SP back to UPTR
+SP = [PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+13];
+
+ireturn;
