@@ -24,6 +24,11 @@ alias i R3;
 alias Inode_Index R4;
 i = 0;
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 // Search for the fileName in the copy of INODE TABLE present in page 59
 while(i < MAX_FILE_NUM) do
 	if([INODE_TABLE + i*16] == EXEC && [INODE_TABLE + i*16 + 1] == fileName) then
@@ -37,6 +42,13 @@ endwhile;
 if(present == 0) then
 	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
 	[[PTBR + 2*((userSP-1)/512)]*512+ (userSP-1)%512] = -1;
+
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+
 	SP = userSP;
 	ireturn;
 endif;
@@ -151,6 +163,13 @@ alias addr2 R11;
 addr2 = [PTBR+8]*512 + 1;
 
 [addr1] = [addr2];
+
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+	
 
 //change the SP to user stack
 SP = 8*512;

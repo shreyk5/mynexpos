@@ -1,0 +1,40 @@
+alias func R1;
+alias LockVarAddr R2;
+
+//---------------------------------------------ACQUIRE KERNAL LOCK---------------------------------------------
+if(func == ACQUIRE_KERN_LOCK) then
+	//when paging or logout is going on in primary core, critical kernel code cannot be executed in secondary core
+	if(CORE == SECONDARY_CORE && (([SYSTEM_STATUS_TABLE + 5] != 0) || ([SYSTEM_STATUS_TABLE + 7] != 0))) then	
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 4] = READY;
+
+		backup;
+		call MOD_5;
+		restore;
+	endif;
+
+	while(tsl(KERN_LOCK)) do
+		continue;
+	endwhile;
+endif;
+//------------------------------------------------------------------------------------------------------------
+
+//-------------------------------------------ACQUIRE SCHEDULER LOCK-------------------------------------------
+if(func == ACQUIRE_SCHED_LOCK) then
+	while(tsl(SCHED_LOCK)) do
+		continue;
+	endwhile;
+endif;
+//------------------------------------------------------------------------------------------------------------
+
+
+if(func == ACQUIRE_GLOCK) then
+	while(tsl(GLOCK)) do
+		continue;
+	endwhile;
+endif;
+
+if(func == RELEASE_LOCK) then
+	[LockVarAddr] = 0;
+endif;
+
+return;

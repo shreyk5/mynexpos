@@ -27,7 +27,7 @@ endif;
 if(functionNum == TERMINAL_READ) then
 	backup;
 	R1 = 8;
-	R2 = [SYSTEM_STATUS_TABLE+1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_0;	//call acquire terminal
 	restore;
 	

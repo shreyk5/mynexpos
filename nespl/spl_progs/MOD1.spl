@@ -200,7 +200,7 @@ if(R1 == KILL_ALL) then
 	endwhile;
 
 	i = 2;
-	while(i<15) do    //exit should not be called on swapper daemon 
+	while(i<14) do    //exit should not be called on swapper daemon 
 		if(i != curr_pid && [PROCESS_TABLE + 16*i + 4] != TERMINATED) then
 			backup;
 			R1 = EXIT_PROCESS;

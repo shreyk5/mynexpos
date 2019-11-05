@@ -8,6 +8,10 @@ SP = [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 11] * 512 - 1;	/
 alias syscall R5;
 syscall = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512];	//get the syscall arg
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
 //------------------------------------------SEMGET------------------------------------------------------
 //Semget sys call is used to acquire a new semaphore
 if (syscall == 17) then
@@ -29,6 +33,13 @@ if (syscall == 17) then
 
 
 	if(free_entry == -1) then	//no free entry in resource table is found
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[[PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512] = -1;	//no free entry in resource table
 		SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;	//reset the mode
@@ -42,11 +53,23 @@ if (syscall == 17) then
 	multipop(R3,R4,R5,R6,R7,R8);
 	
 	if(R0 == -1) then
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[[PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512] = -2;	//no free entry in semaphore table
 		SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;	//reset the mode
 		ireturn;
 	else
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512+i] = 1;
 		[[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512+i+1] = R0;
 
@@ -72,6 +95,12 @@ if (syscall == 18) then
 	//---------------check if the semID is valid in range[0,7]------------------------------
 	//if not valid return -1
 	if((semID<0) || (semID>7) || ([user_area_page*512 + 496 + 2*semID] != 1)) then
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[[PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512] = -1;
 		SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;	//reset the mode
@@ -87,6 +116,12 @@ if (syscall == 18) then
 	restore;
 	
 	[user_area_page*512 + 496 + 2*semID] = -1;	//invalidate the resource table entry
+
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
 
 	[[PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512] = 0;	//indicates success
 	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];		//change to user stack

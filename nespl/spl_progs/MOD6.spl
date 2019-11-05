@@ -15,7 +15,7 @@ if(func == SWAP_OUT) then
  	alias swap_out_pid R6;
  	swap_out_pid = -1;
 
- 	while(i < 16) do
+ 	while(i < 14) do
  		if([PROCESS_TABLE + 16*i + 6] == 0 && [PROCESS_TABLE + 16*i + 4] == WAIT_PROCESS) then
  			swap_out_pid = i;
  			break;
@@ -25,7 +25,7 @@ if(func == SWAP_OUT) then
 
  	if(swap_out_pid == -1) then	//no process is in a WAIT_PROCESS state. then find a process in WAIT_SEMAPHORE state
  		i = 3;
-		while(i < 16) do
+		while(i < 14) do
  			if([PROCESS_TABLE + 16*i + 6] == 0 && [PROCESS_TABLE + 16*i + 4] == WAIT_SEMAPHORE) then
  				swap_out_pid = i;
  				break;
@@ -41,7 +41,7 @@ if(func == SWAP_OUT) then
  		max_tick = 0;
 
  		i = 3;
- 		while(i < 16) do
+ 		while(i < 14) do
  			protable = PROCESS_TABLE + 16*i;
  			alias state R9;
  		  	state = [protable + 4]; 

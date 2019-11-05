@@ -17,6 +17,11 @@ file_descriptor = [[PTBR + 2 * ((user_sp - 4) / 512)] * 512 + ((user_sp - 4) % 5
 alias physicalAddrRetVal R8;
 physicalAddrRetVal = ([PTBR + 2 * ((user_sp - 1) / 512)] * 512) + ((user_sp - 1) % 512);
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 if (file_descriptor != -2) then
 	//check for valid file descriptor
 	alias userAreaPage R9;
@@ -42,6 +47,13 @@ if (file_descriptor != -2) then
 
 	//check for permissions
 	if(user_ID1 != user_ID2 && user_ID1 != 1 && [INODE_TABLE + inode_idx*16 + 3] == EXCLUSIVE) then
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[physicalAddrRetVal] = -3;
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
 		SP = user_sp;
@@ -63,6 +75,12 @@ if (file_descriptor != -2) then
 		call MOD_0;
 		restore;
 
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[physicalAddrRetVal] = -1;
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
 		SP = user_sp;
@@ -80,6 +98,12 @@ if (file_descriptor != -2) then
 		call MOD_0;
 		restore;
 
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 		[physicalAddrRetVal] = -2;
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
 		SP = user_sp;
@@ -103,6 +127,12 @@ if (file_descriptor != -2) then
 			call MOD_0;
 			restore;
 
+			backup;
+			R1 = RELEASE_LOCK;
+			R2 = KERN_LOCK;
+			call ACCESS_CONTROL;
+			restore;
+		
 			[physicalAddrRetVal] = -2;
 			[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;	//reset the mode flag
 			SP = user_sp;
@@ -161,6 +191,13 @@ else
 	[physicalAddrRetVal] = 0;
 
 endif;
+
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+		
 
 SP = user_sp;
 [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;

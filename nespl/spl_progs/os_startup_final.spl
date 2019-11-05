@@ -106,11 +106,12 @@ protable = PROCESS_TABLE + SWAPPER_DAEMON*16;
 [81*512] = [69*512 + 1];
 //-------------------------------------------------------------------------------------------------------------
 
+start;
+
 PTBR = PAGE_TABLE_BASE;
 PTLR = 10;
 SP = 8*512;
-[SYSTEM_STATUS_TABLE+1] = 0;	//idle
+[SYSTEM_STATUS_TABLE+1] = 0;	//idle	
 
-start;	
-
+breakpoint;
 ireturn;

@@ -1,29 +1,52 @@
 //UPTR of currently running process is saved
-[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1]*16) + 11] * 512 - 1;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11] * 512 - 1;
 
 //save context of the currently running process
 backup;
 
 alias curr_pid R5;
-curr_pid = [SYSTEM_STATUS_TABLE + 1];
+curr_pid = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 
 alias i R6;
 i = 0;
 
-if([SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is initiated
+if(CORE == PRIMARY_CORE && [SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is initiated
 	if(curr_pid == SWAPPER_DAEMON && [SYSTEM_STATUS_TABLE + 5] == SWAP_OUT) then
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		backup;
 		R1 = SWAP_OUT;	//no return value
 		R2 = curr_pid;
 		call PAGER_MODULE;	
 		restore;
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
 	else
 		if(curr_pid == SWAPPER_DAEMON && [SYSTEM_STATUS_TABLE + 5] == SWAP_IN) then
+			backup;
+			R1 = ACQUIRE_KERN_LOCK;
+			call ACCESS_CONTROL;
+			restore;
+		
 			backup;
 			R1 = SWAP_IN;	//no return value
 			R2 = curr_pid;
 			call PAGER_MODULE;	
+			restore;
+
+			backup;
+			R1 = RELEASE_LOCK;
+			R2 = KERN_LOCK;
+			call ACCESS_CONTROL;
 			restore;
 		endif;
 	endif;
@@ -56,7 +79,7 @@ else	//swapping is not on now check if it should be initiated
 endif;
 
 
-[PROCESS_TABLE+([SYSTEM_STATUS_TABLE+1]*16)+4] = READY;
+[PROCESS_TABLE+([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16)+4] = READY;
 //currently running process is set to be READY
 
 i = 0;
@@ -73,7 +96,7 @@ call MOD_5;	//scheduler program is called
 restore;	//restore context of new process
 
 //SP is set to user stack pointer of new process
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+1]*16) + 13];
-[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+1]*16) + 9] = 0; // mode is set to 0
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 13];
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 9] = 0; // mode is set to 0
 
 ireturn;

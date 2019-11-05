@@ -10,44 +10,35 @@ multipush(EIP);
 alias userSP R10;
 userSP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
 
-if(userSP == (PTLR*512 - 1)) then
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
+if(userSP == (PTLR*512 - 1) || (EC != 0)) then
+
+	if(EC == 1) then
+		print("IllInst");
+	endif;
+
+	if(EC == 2) then
+		print("IllAccess");
+	endif;
+
+	if(EC == 3) then
+		print("Arithmet");
+	endif;
+
 	backup;
 	R1 = EXIT_PROCESS;
 	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_1;
 	restore;
 
-	call MOD_5;
-endif;
-
-if(EC==1) then
 	backup;
-	print("IllInst");
-	R1 = EXIT_PROCESS;
-	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
-	call MOD_1;
-	restore;
-	
-	call MOD_5;
-endif;
-
-if(EC==2) then
-	backup;
-	print("IllAccess");
-	R1 = EXIT_PROCESS;
-	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
-	call MOD_1;
-	restore;
-	
-	call MOD_5;
-endif;
-
-if(EC == 3) then
-	backup;	
-	print("Arithmet");
-	R1 = EXIT_PROCESS;
-	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
-	call MOD_1;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 	restore;
 
 	call MOD_5;
@@ -75,6 +66,12 @@ if(EC == 0) then
 		[PTBR+7] = "1110";
 		restore;
 		multipop(EC,EIP,EPN,EMA);
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
 	endif;
 
 	if((EPN==4) || (EPN==5) || (EPN==6) || (EPN==7)) then
@@ -87,6 +84,12 @@ if(EC == 0) then
 				
 		[PTBR+EPN*2] = R0;
 		[PTBR+EPN*2+1] = "1100";
+		restore;
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
 		restore;
 	endif;
 

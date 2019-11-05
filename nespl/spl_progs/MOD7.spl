@@ -98,7 +98,7 @@ alias i R1;
 i = 0;
 
 while(i<128) do
-	if(i<=82) then
+	if(i<=84) then
 		[MEMORY_FREE_LIST+i] = 1;
 	else
 		[MEMORY_FREE_LIST+i] = 0;
@@ -165,7 +165,7 @@ while(i<16) do
 endwhile;
 
 [SYSTEM_STATUS_TABLE + 3] = 0;	//wait_mem_count
-[SYSTEM_STATUS_TABLE + 2] = 45;	//mem_free_count
+[SYSTEM_STATUS_TABLE + 2] = 43;	//mem_free_count
 [SYSTEM_STATUS_TABLE + 5] = 0;	//paging status
 [SYSTEM_STATUS_TABLE + 4] = 0;	//number of processes which are swapped
 

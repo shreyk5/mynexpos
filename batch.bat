@@ -19,6 +19,7 @@ load --int=17 ../nespl/spl_progs/INT17.xsm
 load --int=console ../nespl/spl_progs/console_interrupt_handler.xsm
 load --int=disk ../nespl/spl_progs/disk_handler.xsm
 load --exhandler ../nespl/spl_progs/exception_handler.xsm
+load --module 8 ../nespl/spl_progs/MOD8.xsm
 load --module 7 ../nespl/spl_progs/MOD7.xsm
 load --module 5 ../nespl/spl_progs/MOD5.xsm
 load --module 6 ../nespl/spl_progs/MOD6.xsm

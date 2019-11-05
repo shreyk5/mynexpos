@@ -32,7 +32,7 @@ if(func == OPEN) then
 
 	backup;
 	R1 = ACQUIRE_INODE; 
-	R2 = [SYSTEM_STATUS_TABLE +1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inode_idx;
 	call MOD_0;
 	
@@ -48,7 +48,7 @@ if(func == OPEN) then
 		//release inode
 		backup;
 		R1 = RELEASE_INODE;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = inode_idx;
 		call MOD_0;
 		restore;
@@ -72,7 +72,7 @@ if(func == OPEN) then
 	if(open_ft_idx == -1) then	//Reached maximum number of open files in the system
 		backup;
 		R1 = RELEASE_INODE;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = inode_idx;
 		call MOD_0;
 		restore;
@@ -98,7 +98,7 @@ if(func == OPEN) then
 
 	backup;
 	R1 = RELEASE_INODE;
-	R2 = [SYSTEM_STATUS_TABLE +1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inode_idx;
 	call MOD_0;
 	restore;
@@ -160,7 +160,7 @@ if(func == BUFFERED_READ) then
 	backup;
 	R1 = ACQUIRE_BUFFER;
 	R2 = buffer_num; 
-	R3 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_0;
 	restore;
 
@@ -168,7 +168,7 @@ if(func == BUFFERED_READ) then
 		if([BUFFER_TABLE + 4*buffer_num + 1] == 1) then	//dirty bit is set(block was modified in buffer)
 			backup;
 			R1 = DISK_STORE;
-			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 			R3 = 71 + buffer_num;
 			R4 = [BUFFER_TABLE + 4*buffer_num];
 			call MOD_4;
@@ -180,7 +180,7 @@ if(func == BUFFERED_READ) then
 		backup;
 		R1 = DISK_LOAD;
 		R4 = block_num;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = 71 + buffer_num;
 		call MOD_4;
 		restore;
@@ -193,7 +193,7 @@ if(func == BUFFERED_READ) then
 	backup;
 	R1 = RELEASE_BUFFER;
 	R2 = buffer_num;
-	R3 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_0;
 	restore;
 
@@ -218,7 +218,7 @@ if(func == BUFFERED_WRITE) then
 	backup;
 	R1 = ACQUIRE_BUFFER;
 	R2 = buffer_num; 
-	R3 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_0;
 	restore;
 
@@ -226,7 +226,7 @@ if(func == BUFFERED_WRITE) then
 		if([BUFFER_TABLE + 4*buffer_num + 1] == 1) then	//dirty bit is set(block was modified in buffer)
 			backup;
 			R1 = DISK_STORE;
-			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 			R3 = 71 + buffer_num;
 			R4 = [BUFFER_TABLE + 4*buffer_num];
 			call MOD_4;
@@ -238,7 +238,7 @@ if(func == BUFFERED_WRITE) then
 		backup;
 		R1 = DISK_LOAD;
 		R4 = block_num;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = 71 + buffer_num;
 		call MOD_4;
 		restore;
@@ -252,7 +252,7 @@ if(func == BUFFERED_WRITE) then
 	backup;
 	R1 = RELEASE_BUFFER;
 	R2 = buffer_num;
-	R3 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call MOD_0;
 	restore;
 

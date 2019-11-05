@@ -18,6 +18,12 @@ SP = [PROCESS_TABLE + curr_pid * 16 + 11] * 512 - 1;	//change to kernel stack
 alias RetAddr R7;
 RetAddr = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
 
+[SYSTEM_STATUS_TABLE + 7] = 1;
+
+//backup;
+//call MOD_5;
+//restore;
+
 if(curr_pid != 2) then	//curr process is not shell
 	[RetAddr] = -1;	
 	[PROCESS_TABLE + curr_pid*16 + 9] = 0;	//reset the mode flag
@@ -25,11 +31,22 @@ if(curr_pid != 2) then	//curr process is not shell
 	ireturn;
 endif;
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 //Kill all user processes except the shell by calling the kill_all()
 backup;
 R1 = KILL_ALL;
 R2 = 2;
 call MOD_1;
+restore;
+
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 restore;
 
 //set the state of shell process to TERMINATED	
@@ -39,5 +56,7 @@ restore;
 
 [PROCESS_TABLE + 1*16 + 4] = READY;
 [SYSTEM_STATUS_TABLE] = KERNEL;
+
+[SYSTEM_STATUS_TABLE + 7] = 0;
 
 call MOD_5;

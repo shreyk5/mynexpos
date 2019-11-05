@@ -13,7 +13,7 @@ syscall = [[PTBR+2*((userSP-5)/512)]*512 + ((userSP-5)%512)];
 if(syscall==11) then
 	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 11;	//set the mode flag
 
-	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+1]*16+1];//store the pid in the stack
+	[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE+5*CORE +1]*16+1];//store the pid in the stack
 	SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];	//change to user stack
 
 	[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;	//reset the mode flag
@@ -43,7 +43,7 @@ if(syscall==13) then
 	alias pid R3;
 	pid = [[PTBR+2*((userSP-4)/512)]*512 + ((userSP-4)%512)];	//extract the pid for which the current process must wait 
 
-	if((pid==[SYSTEM_STATUS_TABLE+1]) || (pid>=16) || (pid<0) || ([PROCESS_TABLE+16*pid+4]==TERMINATED)) then
+	if((pid==[SYSTEM_STATUS_TABLE + 5*CORE + 1]) || (pid>=16) || (pid<0) || ([PROCESS_TABLE+16*pid+4]==TERMINATED)) then
 		//set the return value to -1
 		[[PTBR+2*((userSP-1)/512)]*512 + ((userSP-1)%512)] = -1;
 		[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0;

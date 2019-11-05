@@ -9,7 +9,7 @@ if(R1 == GET_FREE_PAGE) then
 	[SYSTEM_STATUS_TABLE+3] = [SYSTEM_STATUS_TABLE+3] + 1;
 	
 	while([SYSTEM_STATUS_TABLE+2]==0) do
-		[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE+1]+4] = WAIT_MEM;
+		[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE + 5*CORE + 1]+4] = WAIT_MEM;
 		backup;
 		call MOD_5;
 		restore;
@@ -93,7 +93,7 @@ if(R1 == GET_CODE_PAGE) then	//R2 contains block number to be loaded
 		
 	R1 = DISK_LOAD;
 	R4 = Block_num;
-	R2 = [SYSTEM_STATUS_TABLE+1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = R0;
 	call MOD_4;
 	//print R0;
