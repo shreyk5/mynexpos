@@ -1,4 +1,6 @@
 //UPTR of currently running process is saved
+//print "core";
+//print CORE;
 [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11] * 512 - 1;
 
@@ -25,6 +27,7 @@ if(CORE == PRIMARY_CORE && [SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is in
 		call PAGER_MODULE;	
 		restore;
 
+		print "swap";
 		backup;
 		R1 = RELEASE_LOCK;
 		R2 = KERN_LOCK;
@@ -43,6 +46,7 @@ if(CORE == PRIMARY_CORE && [SYSTEM_STATUS_TABLE + 5] != 0) then	//swapping is in
 			call PAGER_MODULE;	
 			restore;
 
+			print "swap";
 			backup;
 			R1 = RELEASE_LOCK;
 			R2 = KERN_LOCK;

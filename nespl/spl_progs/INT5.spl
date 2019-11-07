@@ -3,7 +3,7 @@
 alias protable R4;
 alias userSP R5;
 
-protable = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16;
+protable = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16;
 [protable + 13] = SP;
 userSP = SP;
 
@@ -15,6 +15,11 @@ syscall = [[PTBR + 2 * ((userSP - 5) / 512)] * 512 + (userSP - 5) % 512];
 
 alias retAddr R7;
 retAddr = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
+
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
 
 //----------------------------------OPEN-------------------------------------------------
 //argument is filename
@@ -48,6 +53,12 @@ if (syscall == INT_OPEN) then
 	endwhile;
 	
 	if(fileDesc == -1) then	//process has reached its limit of resources
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[retAddr] = -3;		//return -3
 		SP = [protable + 13];
 		[protable + 9] = 0;
@@ -64,6 +75,12 @@ if (syscall == INT_OPEN) then
 	file_table_idx = R0;
 
 	if(file_table_idx == -1) then	//if file type is of EXEC
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[retAddr] = -1;
 		SP = [protable + 13];
 		[protable + 9] = 0;
@@ -71,6 +88,12 @@ if (syscall == INT_OPEN) then
 	endif;
 
 	if(file_table_idx == -2) then	//Reached maximum number of open files in the system
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[retAddr] = -2;
 		SP = [protable + 13];
 		[protable + 9] = 0;
@@ -81,6 +104,12 @@ if (syscall == INT_OPEN) then
 	//set the resource table entry
 	[userAreaPage*512 + 496 + 2*fileDesc] = FILE;
 	[userAreaPage*512 + 496 + 2*fileDesc + 1] = file_table_idx;
+
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
 
 	[retAddr] = fileDesc;
 	SP = [protable + 13];
@@ -107,6 +136,12 @@ if(syscall == INT_CLOSE) then
 
 	//check if it is valid or not
 	if((fileDesc<0) || (fileDesc>=8) || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		[retAddr] = -1;
 		SP = [protable + 13];
 		[protable + 9] = 0;
@@ -126,6 +161,12 @@ if(syscall == INT_CLOSE) then
 	//invalidate the resource table entry
 	[userAreaPage*512 + 496 + 2*fileDesc] = -1;
 
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+
 	[retAddr] = 0;	//set the return value to 0
 	SP = [protable + 13];	//set SP to user stack
 	[protable + 9] = 0;	//reset the mode flag	
@@ -139,6 +180,7 @@ endif;
 //return -1 if file desc is invalid
 //return -2 if offset value moves the file pointer to a position outside the file
 if(syscall == INT_SEEK) then
+	[protable + 9] = INT_SEEK;	//set the mode flag
 	alias fileDesc R8;
 	fileDesc = [[PTBR + 2*((userSP-4)/512)]*512 + (userSP-4)%512];
 
@@ -147,10 +189,9 @@ if(syscall == INT_SEEK) then
 
 	//check if file desc is valid or not
 	if((fileDesc<0) || (fileDesc>=8) || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
+
 		[retAddr] = -1;
-		SP = [protable + 13];
-		[protable + 9] = 0;
-		ireturn;	
+		goto label;
 	endif;
 
 	alias open_ft_idx R10;
@@ -161,7 +202,7 @@ if(syscall == INT_SEEK) then
 
 	multipush(R4,R5,R6,R7,R8,R9,R10,R11);
 	R1 = ACQUIRE_INODE;
-	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inode_idx;
 	call MOD_0;
 	multipush(R4,R5,R6,R7,R8,R9,R10,R11);
@@ -169,15 +210,13 @@ if(syscall == INT_SEEK) then
 	if(R0 == -1) then	//file has been deleted
 		backup;
 		R1 = RELEASE_INODE;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = inode_idx;
 		call MOD_0;
 		restore;
 
 		[retAddr] = -1;
-		SP = [protable + 13];
-		[protable + 9] = 0;
-		ireturn;
+		goto label;
 	endif;
 
 	alias LSeek R12;
@@ -189,15 +228,14 @@ if(syscall == INT_SEEK) then
 	if(LSeek + offset < 0) then	//invalid offset
 		backup;
 		R1 = RELEASE_INODE;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		R3 = inode_idx;
 		call MOD_0;
 		restore;
 
 		[retAddr] = -2;
-		SP = [protable + 13];
-		[protable + 9] = 0;
-		ireturn;
+		goto label;
+
 	endif;
 
 	if(offset == 0) then
@@ -212,18 +250,23 @@ if(syscall == INT_SEEK) then
 
 	backup;
 	R1 = RELEASE_INODE;
-	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inode_idx;
 	call MOD_0;
 	restore;
-		
-	[retAddr] = 0;
-	SP = [protable + 13];
-	[protable + 9] = 0;
-	ireturn;	
 
+	[retAddr] = 0;
+	goto label;
 endif;
 //---------------------------------------------------------------------------------------------
 
+label:
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 SP = [protable + 13];
+[protable + 9] = 0;
 ireturn;

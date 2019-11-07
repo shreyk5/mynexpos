@@ -12,15 +12,17 @@ if(func == ACQUIRE_KERN_LOCK) then
 		restore;
 	endif;
 
-	while(tsl(KERN_LOCK)) do
+	while(tsl(KERN_LOCK) == 1) do
 		continue;
 	endwhile;
+	//print "acquired";
+	//print [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9];
 endif;
 //------------------------------------------------------------------------------------------------------------
 
 //-------------------------------------------ACQUIRE SCHEDULER LOCK-------------------------------------------
 if(func == ACQUIRE_SCHED_LOCK) then
-	while(tsl(SCHED_LOCK)) do
+	while(tsl(SCHED_LOCK) == 1) do
 		continue;
 	endwhile;
 endif;
@@ -28,13 +30,17 @@ endif;
 
 
 if(func == ACQUIRE_GLOCK) then
-	while(tsl(GLOCK)) do
+	while(tsl(GLOCK) == 1) do
 		continue;
 	endwhile;
 endif;
 
 if(func == RELEASE_LOCK) then
 	[LockVarAddr] = 0;
+
+	//print "released";
+	//print CORE;
+	//print [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 endif;
 
 return;

@@ -211,7 +211,6 @@ child_stack = [child_protable+13];
 [RetAddr] = childPID;
 [[child_pt+2*((child_stack-1)/512)]*512+(child_stack-1)%512] = 0;
 
-[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0; //reset the mode flag of parent to 0
 [child_protable+4] = CREATED;
 
 backup;
@@ -219,7 +218,8 @@ R1 = RELEASE_LOCK;
 R2 = KERN_LOCK;
 call ACCESS_CONTROL;
 restore;
-	
+
+[PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+9] = 0; //reset the mode flag of parent to 0	
 SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13];
 
 ireturn;

@@ -52,13 +52,15 @@ if(fileDesc != -1) then
 	//check for validity of file desc
 	if(fileDesc<0 || fileDesc>=8 || [userAreaPage*512 + 496 + 2*fileDesc] != FILE) then
 
+		[RetAddress] = -1;	//return -1
+		//[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+		
 		backup;
 		R1 = RELEASE_LOCK;
 		R2 = KERN_LOCK;
 		call ACCESS_CONTROL;
 		restore;
-
-		[RetAddress] = -1;	//return -1
+		
 		[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
 		SP = userSP;
 		ireturn;						
@@ -79,14 +81,17 @@ if(fileDesc != -1) then
 	multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13);
 
 	if(R0 == -1) then
+
+		[RetAddress] = -1;	//return -1
+		//[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+		
 		backup;
 		R1 = RELEASE_LOCK;
 		R2 = KERN_LOCK;
 		call ACCESS_CONTROL;
 		restore;
-
-		[RetAddress] = -1;	//return -1
-		[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+		
+		[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag	
 		SP = userSP;
 		ireturn;
 	endif;
@@ -105,13 +110,15 @@ if(fileDesc != -1) then
 			call MOD_0;
 			restore;
 
+			[RetAddress] = -2;	//file ptr has reahced EOF
+			//[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
+			
 			backup;
 			R1 = RELEASE_LOCK;
 			R2 = KERN_LOCK;
 			call ACCESS_CONTROL;
 			restore;
-
-			[RetAddress] = -2;	//file ptr has reahced EOF
+			
 			[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
 			SP = userSP;
 			ireturn;
@@ -135,13 +142,14 @@ if(fileDesc != -1) then
 			call MOD_0;
 			restore;
 
+			[RetAddress] = -2;	//file ptr has reahced EOF
+			
 			backup;
 			R1 = RELEASE_LOCK;
 			R2 = KERN_LOCK;
 			call ACCESS_CONTROL;
 			restore;
-
-			[RetAddress] = -2;	//file ptr has reahced EOF
+			
 			[PROCESS_TABLE+curr_pid*16+9] = 0;	//reset the mode flag
 			SP = userSP;
 			ireturn;
@@ -180,6 +188,7 @@ else
 	
 	[RetAddress] = 0;
 endif;
+
 
 backup;
 R1 = RELEASE_LOCK;

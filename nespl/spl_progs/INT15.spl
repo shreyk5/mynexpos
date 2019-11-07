@@ -10,6 +10,7 @@ R1 = ACQUIRE_KERN_LOCK;
 call ACCESS_CONTROL;
 restore;
 
+//print "hi";
 //Shutdown system call can be invoked only from the shell process of the root user
 if([PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 1] != 2 || [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 3] != 1) then
 
@@ -27,13 +28,16 @@ if([PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 1] != 2 || [PROCESS_
 endif;
 
 reset;
+[SCHED_LOCK] = 0;
 
-
+//print "hi";
 backup;
 R1 = KILL_ALL;
 R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 call MOD_1;
 restore;
+
+//print "hi";
 
 alias i R7;
 i = 0;
@@ -48,6 +52,8 @@ while(i < 4) do
 	endif;
 	i = i + 1;
 endwhile;
+
+//print "hi";
 
 alias page_num R5;
 alias block_num R6;
@@ -89,6 +95,7 @@ R3 = page_num;
 R4 = block_num;
 call MOD_4;
 //--------------------------------------------------------------------------------------------------
+
 
 backup;
 R1 = RELEASE_LOCK;

@@ -8,6 +8,7 @@ int main()
 		ret = exposcall("Fork");
 		ret = exposcall("Fork");
 		ret = exposcall("Fork");
+		write("hi");
 		ret = exposcall("Exec","pid.xsm");
 		return 0;
 	end

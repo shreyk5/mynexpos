@@ -32,11 +32,26 @@ if(functionNum == TERMINAL_READ) then
 	restore;
 	
 	read;
+
 	[PROCESS_TABLE+16*curr_pid+4] = WAIT_TERMINAL;
-	backup;		//save context
-	//breakpoint;
-	call MOD_5;	//schedule another process
-	restore;	//restore context
+
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+
+	backup;
+	call MOD_5;
+	restore;
+
+	backup;
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+	//backup;		//save context
+	//call MOD_5;	//schedule another process
+	//restore;	//restore context
 	
 	[ [PTBR+(2*(word)/512)]*512 + word%512] = [PROCESS_TABLE+curr_pid*16+8];
 endif;
@@ -68,9 +83,24 @@ if(functionNum == DISK_LOAD) then
 	load(page_num,block_num);
 	
 	[PROCESS_TABLE+curr_pid*16+4] = WAIT_DISK;
+
 	backup;
-	call MOD_5;	//schedule another process while loading takes place
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 	restore;
+
+	backup;
+	call MOD_5;
+	restore;
+
+	backup;
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+	//backup;
+	//call MOD_5;	//schedule another process while loading takes place
+	//restore;
 	
 endif;
 //--------------------END OF DISK LOAD-------------------------------------
@@ -100,10 +130,21 @@ if(functionNum == DISK_STORE) then
 	store(page_num,block_num);
 	
 	[PROCESS_TABLE+curr_pid*16+4] = WAIT_DISK;
+
 	backup;
-	call MOD_5;	//schedule another process while storing takes place
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 	restore;
-	
+
+	backup;
+	call MOD_5;
+	restore;
+
+	backup;
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
 endif;
 //--------------------END OF DISK STORE-------------------------------------
 

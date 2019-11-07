@@ -3,11 +3,22 @@
 [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+13] = SP;
 SP = [PROCESS_TABLE+[SYSTEM_STATUS_TABLE + 5*CORE + 1]*16+11]*512-1;
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 // no need to set the process to terminated as exit process will do it
 backup;
 R1 = EXIT_PROCESS;
 R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 call MOD_1;
+restore;
+
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 restore;
 
 call MOD_5;	//schedule processes

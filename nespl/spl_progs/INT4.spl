@@ -15,6 +15,11 @@ ret_addr = [PTBR + 2 * ((userSP - 1) / 512)] * 512 + (userSP - 1) % 512;
 alias protable R11;
 protable = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16; 
 
+backup;
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 //-----------------------------------------CREATE---------------------------------------------------
 //arguments are filename,permission(0 or 1)
 //return 0 if success or filename already present
@@ -38,11 +43,8 @@ if (syscall == 1) then
 	//first checking if file is already present
 	while(i<MAX_FILE_NUM) do
 		if([INODE_TABLE + i*16 + 1] == fileName) then
-			[protable + 9] = 0;	//reset the mode
 			[ret_addr] = 0;	//already present
-			SP = [protable + 13];	//change to user stack
-
-			ireturn; 
+			goto label;
 		endif;
 		i = i + 1;
 	endwhile;
@@ -61,11 +63,8 @@ if (syscall == 1) then
 	endwhile;
 
 	if(free_entry == -1) then	//no free entry present
-		[protable + 9] = 0;	//reset the mode
 		[ret_addr] = -1;	//no free entry
-		SP = [protable + 13];	//change to user stack
-
-		ireturn;
+		goto label;
 	endif;
 
 	//Free entry is present
@@ -89,11 +88,8 @@ if (syscall == 1) then
 	[ROOT_FILE + free_entry*8 + 3] = [USER_TABLE + userID*2 + 0];	//username field from user table
 	[ROOT_FILE + free_entry*8 + 4] = permission;
 
-	[protable + 9] = 0;	//reset the mode
 	[ret_addr] = 0;	//success
-	SP = [protable + 13];	//change to user stack
-
-	ireturn;
+	goto label;
 endif;
 //--------------------------------------------------------------------------------------------------
 
@@ -126,20 +122,14 @@ if (syscall == 4) then
 
 		//if file is not present return 0
 		if(idx == -1) then
-			[protable + 9] = 0;	//reset the mode
 			[ret_addr] = 0;	//success
-			SP = [protable + 13];	//change to user stack
-
-			ireturn;		
+			goto label;
 		endif;	
 
 		//if it is not a data file
 		if([INODE_TABLE + 16*idx + 0] != DATA) then
-			[protable + 9] = 0;	//reset the mode
 			[ret_addr] = -1;	//not a data file
-			SP = [protable + 13];	//change to user stack
-
-			ireturn;
+			goto label;
 		endif;
 
 		//check if current user is allowed to delete the file
@@ -147,11 +137,8 @@ if (syscall == 4) then
 		curr_userID = [protable + 3];
 		if([INODE_TABLE + 16*idx + 4] == 0)	then//if exclusive permission is set
 			if([INODE_TABLE + 16*idx + 3] != curr_userID && curr_userID != 1) then
-				[protable + 9] = 0;	//reset the mode
 				[ret_addr] = -1;//no permission
-				SP = [protable + 13];	//change to user stack
-
-				ireturn;	
+				goto label;
 			endif;
 		endif;
 
@@ -177,12 +164,8 @@ if (syscall == 4) then
 			call MOD_0;
 			multipop(R1,R2,R3);	
 
-			[protable + 9] = 0;	//reset the mode
 			[ret_addr] = -2;//file is in use
-			SP = [protable + 13];	//change to user stack
-
-			ireturn;
-
+			goto label;
 		endif;
 
 		//If any of the disk blocks of deleted file are in buffer cache, and if buffer page is marked dirty,
@@ -218,15 +201,21 @@ if (syscall == 4) then
 		restore;
 
 		[ret_addr] = 0;	//successful deletion
-		[protable + 9] = 0;	//reset the mode
-		SP = [protable + 13];	//change to user stack
-
-		ireturn;
+		goto label;
 		//Open file table is not updated when a file is deleted
 		//Open File Table stores the information about all the files that are open while the OS is running.
 		//We only delete the files which are not opened when it is being deleted
 		//hence the file does not have an entry in open file table	
 endif;
 //--------------------------------------------------------------------------------------------------
-SP = [protable + 13];	//change to user stack
+label:
+backup;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+restore;
+
+SP = [protable + 13];
+[protable + 9] = 0;
 ireturn;
+

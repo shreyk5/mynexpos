@@ -10,10 +10,23 @@ if(R1 == GET_FREE_PAGE) then
 	
 	while([SYSTEM_STATUS_TABLE+2]==0) do
 		[PROCESS_TABLE+16*[SYSTEM_STATUS_TABLE + 5*CORE + 1]+4] = WAIT_MEM;
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		backup;
 		call MOD_5;
 		restore;
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
 	endwhile;	
+	
 	[SYSTEM_STATUS_TABLE+3] = [SYSTEM_STATUS_TABLE+3]-1;
 	[SYSTEM_STATUS_TABLE+2] = [SYSTEM_STATUS_TABLE+2]-1;
 	restore;

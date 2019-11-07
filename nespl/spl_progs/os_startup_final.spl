@@ -10,6 +10,9 @@ loadi(69,11);	//load idle code
 SP = 76*512-1;
 call MOD_7;
 
+[KERN_LOCK] = 0;
+[SCHED_LOCK] = 0;
+
 PTBR = PAGE_TABLE_BASE;
 PTLR = 10;
 

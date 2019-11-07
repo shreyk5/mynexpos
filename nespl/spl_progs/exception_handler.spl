@@ -41,7 +41,15 @@ if(userSP == (PTLR*512 - 1) || (EC != 0)) then
 	call ACCESS_CONTROL;
 	restore;
 
+	backup;
 	call MOD_5;
+	restore;
+	
+	backup;
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+
 endif;
 
 if(EC == 0) then

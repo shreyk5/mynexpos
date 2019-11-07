@@ -5,9 +5,22 @@ if(functionNum == ACQUIRE_TERMINAL) then
 	alias curr_pid R2;
 	while([TERMINAL_STATUS_TABLE] == 1) do //check if terminal is already in use
 		[PROCESS_TABLE+curr_pid*16+4] = WAIT_TERMINAL;
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+
 		backup;
 		call MOD_5;	//schedule some other process while curr process is waiting for terminal to be freed
 		restore;
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 	endwhile;
 	[TERMINAL_STATUS_TABLE] = 1;	//give the terminal to this process
 	[TERMINAL_STATUS_TABLE+1] = curr_pid;
@@ -40,9 +53,22 @@ if(functionNum == ACQUIRE_DISK) then
 	alias curr_pid R2;
 	while([DISK_STATUS_TABLE]==1) do
 		[PROCESS_TABLE+16*curr_pid+4] = WAIT_DISK;
+
+		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 		backup;
 		call MOD_5;
 		restore;
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 	endwhile;
 	
 	[DISK_STATUS_TABLE] = 1;
@@ -99,13 +125,24 @@ if(functionNum == ACQUIRE_INODE) then
 	alias inode_index R3;
 
 	while([FILE_STATUS_TABLE + 4*inode_index + 0] != -1) do
-		//print "err";
 		[PROCESS_TABLE + 16*curr_pid + 4] = WAIT_FILE;
 		[PROCESS_TABLE + 16*curr_pid + 5] = inode_index;
 
 		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
+		backup;
 		call MOD_5;
 		restore;
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 	endwhile;
 
 	//check if the inode entry for this file has become invalide
@@ -159,8 +196,20 @@ if(functionNum == ACQUIRE_BUFFER) then
 		[PROCESS_TABLE + curr_pid*16 + 5] = buffer_num;
 
 		backup;
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
+		backup;
 		call MOD_5;
 		restore;
+
+		backup;
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
+		restore;
+		
 	endwhile;
 
 	[BUFFER_TABLE + buffer_num*4 + 2] = curr_pid;

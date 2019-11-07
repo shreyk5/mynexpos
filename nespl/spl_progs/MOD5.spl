@@ -1,9 +1,14 @@
 // get the pid of current running process
+
+multipush(BP);
+backup;
+R1 = ACQUIRE_SCHED_LOCK;
+call ACCESS_CONTROL;
+restore;
+
 alias curr_pid R0;
 
 curr_pid = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
-
-multipush(BP);
 
 //save the values of ptbr,ptlr etc into the process table
 [PROCESS_TABLE + curr_pid*16 + 14] = PTBR;
@@ -15,11 +20,6 @@ new_pid = 0;	//by default IDLE process
 
 alias i R2;
 i = (curr_pid + 1);
-
-backup;
-R1 = ACQUIRE_SCHED_LOCK;
-call ACCESS_CONTROL;
-restore;
 
 if(CORE == PRIMARY_CORE) then
 
@@ -35,7 +35,7 @@ if(CORE == PRIMARY_CORE) then
 		endif;
 	
 	else
-		if([SYSTEM_STATUS_TABLE + 7] != 0 && [SYSTEM_STATUS_TABLE + 6] != IDLE2_PROCESS) then	//logout status is 1 and secondary core is not running idle2
+		if([SYSTEM_STATUS_TABLE + 7] == 1 && [SYSTEM_STATUS_TABLE + 6] != IDLE2_PROCESS) then	//logout status is 1 and secondary core is not running idle2
 			new_pid = 0;
 		
 		else
@@ -54,10 +54,10 @@ if(CORE == PRIMARY_CORE) then
 
 else
 	curr_pid = [SYSTEM_STATUS_TABLE + 6];
- 	i = curr_pid + 1;
+ 	i = (curr_pid + 1)%15 + 3;
 	new_pid = IDLE2_PROCESS;
 
-	if([SYSTEM_STATUS_TABLE + 5] != 0 || [SYSTEM_STATUS_TABLE + 7] != 0) then
+	if([SYSTEM_STATUS_TABLE + 5] != 0 || [SYSTEM_STATUS_TABLE + 7] == 1) then
 		new_pid = IDLE2_PROCESS;
 	else
 		while(i<=14 && i>=3) do    //do not schedule IDLE,init,shell,daemon
@@ -72,6 +72,12 @@ else
 	endif;
 endif;
 
+// print "core";
+// print CORE;
+//print new_pid;
+
+breakpoint;
+
 //change the SP to kernel stack of new process
 SP = [PROCESS_TABLE + 16*new_pid + 11]*512 + [PROCESS_TABLE + 16*new_pid + 12]; 
 PTBR = [PROCESS_TABLE + 16*new_pid + 14];
@@ -79,21 +85,37 @@ PTLR = [PROCESS_TABLE + 16*new_pid + 15];
 
 [SYSTEM_STATUS_TABLE + 5*CORE + 1] = new_pid;
 
-backup;
-R1 = RELEASE_LOCK;
-R2 = SCHED_LOCK;
-call ACCESS_CONTROL;
-restore;
-
 if([PROCESS_TABLE + new_pid*16 + 4] == CREATED) then
 	BP = [[PROCESS_TABLE + new_pid*16 + 11] * 512];
 	[PROCESS_TABLE + new_pid*16 + 4] = RUNNING;
+
+	//print "sched";
+	backup;
+	R1 = RELEASE_LOCK;
+	R2 = SCHED_LOCK;
+	call ACCESS_CONTROL;
+	restore;
+
+	//print "out";
+	//print CORE;
+
 	[PROCESS_TABLE + new_pid*16 + 9] = 0;
 	SP = [PROCESS_TABLE + new_pid*16 + 13];
 	ireturn;
 endif;
 
 [PROCESS_TABLE+new_pid*16+4] = RUNNING;
+
 multipop(BP);
+//print "sched";
+//print CORE;
+backup;
+R1 = RELEASE_LOCK;
+R2 = SCHED_LOCK;
+call ACCESS_CONTROL;
+restore;
+
+//print "out";
+//print CORE;
 
 return;
